@@ -11,12 +11,11 @@ import { PAGES } from '../../constants/navigation';
  * [SCR-002] 코드 분석 화면
  * image/코드입력.png 와이어프레임 최신본 준수
  */
-export default function CodeAnalysisPage({ setPage }) {
+export default function CodeAnalysisPage({ setPage, currentUser, onLogin, onLogout }) {
   const [selectedFile, setSelectedFile] = useState('users.ts');
   const [isAnalyzing, setIsAnalyzing] = useState(true);
 
   const handleStartAnalysis = (config) => {
-    // 분석 시작 시 결과 페이지로 전환
     setPage(PAGES.RESULT);
   };
 
@@ -26,7 +25,9 @@ export default function CodeAnalysisPage({ setPage }) {
         compact
         title="payments-api"
         subtitle={`src/routes/${selectedFile}`}
-        user={{ name: '지웅', role: 'Frontend / LLM' }}
+        currentUser={currentUser}
+        onLogin={onLogin}
+        onLogout={onLogout}
       />
 
       <div className="workspace">
@@ -46,7 +47,6 @@ export default function CodeAnalysisPage({ setPage }) {
             <AnalysisProgressPanel
               visible={isAnalyzing}
               percent={64}
-              onClose={() => setIsAnalyzing(false)}
             />
           )}
         </CodeViewer>

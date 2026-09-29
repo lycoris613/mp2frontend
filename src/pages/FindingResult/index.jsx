@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import PageHeader from '../../components/layout/PageHeader';
 import FileTree from '../../components/common/FileTree';
 import CodeViewer from '../../components/common/CodeViewer';
 import VulnerabilityTypeTabs from './components/VulnerabilityTypeTabs';
@@ -11,7 +12,7 @@ import { sampleCodeLines } from '../../data/analysisData';
  * [SCR-003] 취약점 분석 결과 화면
  * image/결과화면.png 와이어프레임 최신본 준수
  */
-export default function FindingResultPage() {
+export default function FindingResultPage({ currentUser, onLogin, onLogout }) {
   const [selectedFile, setSelectedFile] = useState('users.ts');
   const [activeTab, setActiveTab] = useState('SQL_INJECTION');
   const [codeScope, setCodeScope] = useState('finding');
@@ -19,21 +20,16 @@ export default function FindingResultPage() {
   return (
     <main className="content">
       {/* 상단 헤더 */}
-      <header className="topbar">
-        <div>
-          <h1>취약점 분석 결과</h1>
-          <p>payments-api · src/routes/{selectedFile}</p>
-        </div>
-
-        <div className="top-actions">
+      <PageHeader
+        title="취약점 분석 결과"
+        subtitle={`payments-api · src/routes/${selectedFile}`}
+        currentUser={currentUser}
+        onLogin={onLogin}
+        onLogout={onLogout}
+        extraAction={
           <button className="outline-btn report-btn">보고서 내보내기</button>
-          <span className="avatar"></span>
-          <div className="user">
-            <b>지웅</b>
-            <small>Frontend / LLM</small>
-          </div>
-        </div>
-      </header>
+        }
+      />
 
       <div className="page-pad result-page">
         {/* 필터 탭 & 심각도 요약 바 */}

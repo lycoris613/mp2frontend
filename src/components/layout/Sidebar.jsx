@@ -4,20 +4,28 @@ import {
   FileSearch2,
   Search,
   Folder,
-  ShieldCheck,
   ChevronRight,
+  LogIn,
+  LogOut,
+  User,
 } from 'lucide-react';
 import { PAGES } from '../../constants/navigation';
 
 /**
  * 좌측 고정 사이드바 컴포넌트
- * 04 UI화면 설계서 2.1절 및 05 React 컴포넌트 설계서 표 3-1 준수
+ * 로그인/로그아웃 상태 및 사용자 정보 연동
  *
  * @param {string} page - 현재 활성화된 페이지 ID
  * @param {function} setPage - 페이지 전환 함수
- * @param {Array} projects - 프로젝트 목록
+ * @param {object|null} currentUser - 로그인된 사용자 객체
+ * @param {function} onLogout - 로그아웃 핸들러
  */
-export default function Sidebar({ page, setPage, projects = [] }) {
+export default function Sidebar({
+  page,
+  setPage,
+  currentUser = null,
+  onLogout,
+}) {
   const navItem = (id, Icon, label) => (
     <button
       className={`nav-item ${page === id ? 'active' : ''}`}
@@ -78,6 +86,36 @@ export default function Sidebar({ page, setPage, projects = [] }) {
       <button className="add-project-btn" onClick={() => setPage(PAGES.ANALYZE)}>
         <span>+ 프로젝트 추가</span>
       </button>
+
+      {/* 사이드바 하단 로그인/사용자 상태 바 */}
+      <div className="sidebar-auth-bottom">
+        {currentUser ? (
+          <div className="sidebar-user-card">
+            <div className="user-info">
+              <span className="avatar-dot"></span>
+              <div>
+                <b>{currentUser.name}</b>
+                <small>{currentUser.role}</small>
+              </div>
+            </div>
+            <button
+              className="sidebar-logout-btn"
+              onClick={onLogout}
+              title="로그아웃"
+            >
+              <LogOut size={12} />
+            </button>
+          </div>
+        ) : (
+          <button
+            className="sidebar-login-btn"
+            onClick={() => setPage(PAGES.LOGIN)}
+          >
+            <LogIn size={13} />
+            <span>로그인하기</span>
+          </button>
+        )}
+      </div>
     </aside>
   );
 }

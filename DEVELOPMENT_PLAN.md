@@ -92,7 +92,7 @@ src/
 2. **코드 분석 페이지 ([SCR-002](note/04%20UI%ED%99%94%EB%A9%B4%20%EC%84%A4%EA%B3%84%EC%84%9C.txt))**
    - 다중 파일 관리 (로컬 `useState`): `+ 파일 추가`, 파일 탭/트리 전환, 파일별 소스코드 편집 (`textarea`)
    - 분석 설정 패널 (`AnalysisSettingsPanel`): 언어 선택(TS/JS), 분석 범위(현재 파일/전체), 3대 보안 정책 옵션
-   - 분석 진행 패널 (`AnalysisProgressPanel`): 2단계 상태 표시 (SCANNING / EXPLAINING), 프로그레스 바, 실시간 로그
+   - 분석 진행 패널 (`AnalysisProgressPanel`): 심플한 진행 상태 및 프로그레스 바(%) 표시 (실시간 로그 추적 제외하여 백엔드/프론트엔드 연동 부담 완화)
 3. **취약점 분석 결과 페이지 ([SCR-003](note/04%20UI%ED%99%94%EB%A9%B4%20%EC%84%A4%EA%B3%84%EC%84%9C.txt))**
    - 유형 필터 탭 (`VulnerabilityTypeTabs`): SQL 삽입, 하드코딩 API 키, XSS 등 탭별 건수 및 필터링
    - 집계 요약 (`SeveritySummary`): 전체 건수 및 심각도 등급별 요약 카운터
@@ -101,7 +101,7 @@ src/
    - 취약점 조치: 상태 변경 (미해결 / 해결 / 무시) 버튼
 4. **비동기 분석 파이프라인 & 전역 상태 관리**
    - `analysisStore.js`: 분석 요청, 파일/취약점 목록 저장, 선택된 취약점 관리
-   - **2단계 비동기 폴링 엔진**: 분석 시작 후 `GET /api/v1/analyses/{id}/status`를 2초 간격으로 폴링하여 `SCANNING` → `EXPLAINING` → `COMPLETED` 상태 전이 처리
+   - **비동기 폴링 엔진**: 분석 시작 후 `GET /api/v1/analyses/{id}/status`를 2초 간격으로 폴링하여 진행률(%) 갱신 및 `COMPLETED` 시 결과 화면으로 전환
    - `analysisApi.js`, `findingApi.js`: 백엔드 분석/취약점 호출 함수 모듈화
 
 #### 2.2 담당 파일 및 디렉토리
@@ -193,8 +193,8 @@ src/
   - [ ] 분석 & 취약점 API 함수 모듈화 (`analysisApi.js`, `findingApi.js`)
   - [ ] `analysisStore.js` 구현: 분석 생성 요청, 결과 데이터 상태 저장
   - [ ] **2초 간격 비동기 폴링 시뮬레이터** 구현:
-    - 시작 → `SCANNING` (진행률 30%) → `EXPLAINING` (진행률 75%) → `COMPLETED` (100%)
-  - [ ] 분석 중 / 분석 완료(결과 화면 자동 이동) / 분석 실패 분기 처리
+    - 시작 → 진행률 갱신(30% → 75% → 100%) → `COMPLETED` 시 결과 화면으로 자동 전환
+  - [ ] 분석 중 / 분석 완료 / 분석 실패 상태 분기 처리
 
 ---
 

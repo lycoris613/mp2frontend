@@ -10,14 +10,18 @@ import { PAGES } from '../../constants/navigation';
  * [SCR-001] 홈 대시보드 화면
  * 04 UI화면 설계서 3절 및 05 React 컴포넌트 설계서 표 3-1 준수
  */
-export default function HomePage({ setPage }) {
+export default function HomePage({ setPage, currentUser, onLogin, onLogout }) {
   const handleStartAnalyze = () => {
     setPage(PAGES.ANALYZE);
   };
 
   return (
     <main className="content">
-      <PageHeader />
+      <PageHeader
+        currentUser={currentUser}
+        onLogin={onLogin}
+        onLogout={onLogout}
+      />
 
       <div className="page-pad">
         <HeroBanner onStart={handleStartAnalyze} />

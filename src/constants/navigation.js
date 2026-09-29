@@ -5,4 +5,5 @@ export const PAGES = {
   HOME: 'home',
   ANALYZE: 'analyze',
   RESULT: 'result',
+  LOGIN: 'login',
 };
