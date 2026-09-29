@@ -1,0 +1,1346 @@
+# REST API 설계서
+
+## 문서 정보
+
+- **프로젝트명**: CodeGuard AI
+- **작성자**: 홍서연
+- **작성일**: 2026-09-27
+- **버전**: v1.1 (Draft — 규칙 기반 탐지 확정 반영)
+- **검토자**: [백엔드 담당자명]
+- **API 버전**: v1
+- **Base URL**: `http://localhost:8080/api/v1`
+- **LLM 내부 서비스**: `http://localhost:8000` (FastAPI, 외부 비공개)
+
+> **v1.1 변경 사항**
+탐지 주체가 **규칙 기반 Security Scanner**로 확정됨에 따라 다음을 반영했다.
+① 분석 상태에 `SCANNING` / `EXPLAINING` 단계 추가 — 폴링 응답에 `stage` 포함
+② LLM 내부 API가 `analyze`(탐지+설명) → **`explain`(설명만)** 으로 변경
+③ 취약점 응답에 `ruleId` 추가, `confidence`는 `llmAnalysis` 하위로 이동
+④ 취약점 유형은 **SQL_INJECTION / HARDCODED_SECRET / XSS 3종**
+> 
+
+---
+
+## 1. API 설계 개요
+
+### 1.1 설계 목적
+
+> React 프론트엔드와 Spring Boot 백엔드, 그리고 Spring Boot와 FastAPI LLM 서비스 간의
+통신 규격을 정의하여, **비동기 분석 파이프라인**을 일관되게 구현할 수 있도록 한다.
+> 
+
+### 1.2 설계 원칙
+
+- **RESTful 아키텍처**: HTTP 메서드와 상태 코드의 올바른 사용
+- **2단계 파이프라인의 가시화**: 탐지(Scanner)와 설명(LLM)은 소요 시간이 크게 다르므로 상태를 분리해 노출한다
+- **비동기 우선**: 분석 요청은 즉시 `202 Accepted`를 반환하고 폴링으로 진행 상황을 전달한다
+- **소유권 기반 인가**: 모든 분석 리소스는 생성한 사용자만 접근할 수 있다
+- **일관성**: 모든 응답을 공통 래퍼(`success` / `data` / `message` / `timestamp`)로 감싼다
+- **버전 관리**: URL 경로로 버전 구분 (`/api/v1`)
+- **내부 API 분리**: LLM 서비스는 프론트에 노출하지 않고 백엔드만 호출한다 (BR-L006)
+
+### 1.3 기술 스택
+
+- **프레임워크**: Spring Boot 4.0.8 (Java 17)
+- **인증**: JWT (AccessToken)
+- **직렬화**: JSON (Jackson)
+- **LLM 서비스**: FastAPI (Python) — OpenAPI 3.1 자동 문서화
+- **API 문서**: springdoc-openapi (Swagger UI)
+- **CORS 허용 오리진**: `http://localhost:5173`, `http://localhost:3000`
+
+---
+
+## 2. API 공통 규칙
+
+### 2.1 URL 설계 규칙
+
+| 규칙 | 설명 | 좋은 예 | 나쁜 예 |
+| --- | --- | --- | --- |
+| **명사 사용** | 동사가 아닌 명사로 리소스 표현 | `/api/v1/analyses` | `/api/v1/getAnalysis` |
+| **복수형 사용** | 컬렉션은 복수형 | `/api/v1/findings` | `/api/v1/finding` |
+| **계층 구조** | 리소스 관계를 URL로 표현 | `/api/v1/analyses/12/findings` | `/api/v1/getAnalysisFindings` |
+| **소문자·하이픈** | URL은 소문자, 단어 구분은 하이픈 | `/api/v1/dashboard/summary` | `/api/v1/dashboardSummary` |
+| **상태 변경은 서브리소스** | 부분 상태 변경은 PATCH + 하위 경로 | `PATCH /findings/5/status` | `POST /updateFindingStatus` |
+
+> **명명 주의**: `analysis`의 복수형은 `analyses`이다. 프론트·백엔드 모두 이 철자를 사용한다.
+> 
+
+### 2.2 HTTP 메서드 사용 규칙
+
+| 메서드 | 용도 | 멱등성 | 안전성 | 예시 |
+| --- | --- | --- | --- | --- |
+| **GET** | 리소스 조회 | ✅ | ✅ | `GET /api/v1/analyses` |
+| **POST** | 리소스 생성 / 작업 트리거 | ❌ | ❌ | `POST /api/v1/analyses` |
+| **PATCH** | 부분 수정 | ❌ | ❌ | `PATCH /api/v1/findings/5/status` |
+| **DELETE** | 리소스 삭제 | ✅ | ❌ | `DELETE /api/v1/analyses/12` |
+
+> PUT은 본 API에서 사용하지 않는다. 분석 결과는 생성 후 전체 교체 대상이 아니기 때문이다.
+> 
+
+### 2.3 HTTP 상태 코드 가이드
+
+| 코드 | 상태 | 본 프로젝트 사용 예시 |
+| --- | --- | --- |
+| **200** | OK | 조회 성공, 상태 변경 성공 |
+| **201** | Created | 회원가입 성공 |
+| **202** | Accepted | **분석 요청 접수** (탐지 → 설명 비동기 처리 시작) |
+| **204** | No Content | 로그아웃, 분석 삭제 성공 |
+| **400** | Bad Request | 입력값 검증 실패, 지원하지 않는 언어 |
+| **401** | Unauthorized | 토큰 없음/만료, 로그인 실패 |
+| **403** | Forbidden | 타인의 분석 접근 시도 |
+| **404** | Not Found | 존재하지 않는 분석/취약점 ID |
+| **409** | Conflict | 이메일 중복, 이미 해결된 취약점 재해결 |
+| **413** | Payload Too Large | 파일 크기/총 코드 크기 초과 |
+| **422** | Unprocessable Entity | 상태 전이 위반 (진행 중 분석 삭제 등) |
+| **502** | Bad Gateway | LLM 서비스 호출 실패 |
+| **500** | Internal Server Error | 예기치 못한 오류 |
+
+### 2.4 공통 요청 헤더
+
+```
+Content-Type: application/json
+Accept: application/json
+Authorization: Bearer {ACCESS_TOKEN}
+```
+
+### 2.5 공통 응답 형식
+
+#### 성공 응답 (단일 객체)
+
+```json
+{
+  "success": true,
+  "data": { },
+  "message": "요청이 성공적으로 처리되었습니다",
+  "timestamp": "2026-09-27 14:32:21"
+}
+```
+
+#### 성공 응답 (목록 / 페이지네이션)
+
+```json
+{
+  "success": true,
+  "data": {
+    "content": [],
+    "page": {
+      "number": 0,
+      "size": 20,
+      "totalElements": 128,
+      "totalPages": 7,
+      "first": true,
+      "last": false,
+      "numberOfElements": 20
+    }
+  },
+  "message": "목록 조회가 완료되었습니다",
+  "timestamp": "2026-09-27 14:32:21"
+}
+```
+
+#### 에러 응답
+
+> 레포의 기존 `ErrorObject`(statusCode / message / timestamp) 구조를 그대로 따르되, 클라이언트가 분기할 수 있도록 `errorCode`를 추가한다.
+> 
+
+```json
+{
+  "success": false,
+  "statusCode": 403,
+  "errorCode": "ACCESS_DENIED",
+  "message": "해당 분석에 접근할 권한이 없습니다",
+  "timestamp": "2026-09-27 14:32:21"
+}
+```
+
+#### 검증 실패 응답 (400)
+
+```json
+{
+  "success": false,
+  "statusCode": 400,
+  "errorCode": "VALIDATION_ERROR",
+  "message": "입력값이 올바르지 않습니다",
+  "fieldErrors": [
+    { "field": "title", "message": "분석 제목은 필수입니다" },
+    { "field": "files", "message": "파일은 1개 이상 20개 이하여야 합니다" }
+  ],
+  "timestamp": "2026-09-27 14:32:21"
+}
+```
+
+---
+
+## 3. 인증 및 권한 관리
+
+### 3.1 JWT 토큰 기반 인증
+
+#### 3.1.1 회원가입
+
+```yaml
+POST /api/v1/auth/signup
+Content-Type: application/json
+Public API (인증 불필요)
+
+Request Body:
+{
+  "email": "dev@codeguard.dev",
+  "password": "codeguard123!"
+}
+
+Validation Rules:
+- email: 필수, 이메일 형식, 중복 불가 (BR-U001)
+- password: 필수, 8-64자, 영문+숫자 조합 포함 (BR-U003)
+
+Response (201 Created):
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "email": "dev@codeguard.dev",
+    "createdAt": "2026-09-27T14:30:00"
+  },
+  "message": "회원가입이 완료되었습니다"
+}
+
+Response (409 Conflict):
+{
+  "success": false,
+  "statusCode": 409,
+  "errorCode": "EMAIL_DUPLICATE",
+  "message": "이미 사용 중인 이메일입니다"
+}
+```
+
+#### 3.1.2 로그인
+
+```yaml
+POST /api/v1/auth/login
+Content-Type: application/json
+Public API
+
+Request Body:
+{
+  "email": "dev@codeguard.dev",
+  "password": "codeguard123!"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "tokenType": "Bearer",
+    "expiresIn": 3600,
+    "user": {
+      "id": 1,
+      "email": "dev@codeguard.dev"
+    }
+  },
+  "message": "로그인이 성공하였습니다"
+}
+
+Response (401 Unauthorized):
+{
+  "success": false,
+  "statusCode": 401,
+  "errorCode": "INVALID_CREDENTIALS",
+  "message": "이메일 또는 비밀번호가 올바르지 않습니다"
+}
+```
+
+> 이메일 미존재와 비밀번호 불일치를 **같은 메시지**로 응답한다 (계정 존재 여부 노출 방지).
+> 
+
+#### 3.1.3 로그아웃
+
+```yaml
+POST /api/v1/auth/logout
+Authorization: Bearer {ACCESS_TOKEN}
+
+Response (204 No Content)
+```
+
+> MVP는 서버 세션을 두지 않으므로 클라이언트에서 토큰을 폐기한다.
+RefreshToken·토큰 블랙리스트는 범위에서 제외한다.
+> 
+
+#### 3.1.4 내 정보 조회
+
+```yaml
+GET /api/v1/auth/me
+Authorization: Bearer {ACCESS_TOKEN}
+
+Response (200 OK):
+{
+  "success": true,
+  "data": { "id": 1, "email": "dev@codeguard.dev" }
+}
+```
+
+### 3.2 권한 레벨 정의
+
+| 역할 | 권한 | 설명 |
+| --- | --- | --- |
+| **ANONYMOUS** | 회원가입, 로그인 | 그 외 모든 API 차단 |
+| **USER** | 본인 분석의 생성·조회·삭제, 취약점 상태 변경 | MVP의 유일한 인증 역할 |
+
+> 별도 ADMIN 역할은 MVP 범위에서 제외한다 (BR-U004에 따라 소유권 검사만 수행).
+> 
+
+### 3.3 소유권 검사 규칙
+
+모든 `/analyses/**`, `/findings/**` 요청은 다음 순서로 검사한다.
+
+```
+1. 토큰 유효성 → 실패 시 401
+2. 리소스 존재 여부 → 없으면 404
+3. 리소스 소유자 == 토큰 사용자 → 불일치 시 403
+```
+
+---
+
+## 4. 상세 API 명세
+
+### 4.0 API 전체 목록
+
+| No | 메서드 | 엔드포인트 | 용도 | 인증 | 담당멤버 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | POST | `/api/v1/auth/signup` | 회원가입 | ✖ | 예빈 |
+| 2 | POST | `/api/v1/auth/login` | 로그인 | ✖ |  |
+| 3 | POST | `/api/v1/auth/logout` | 로그아웃 | ✔ |  |
+| 4 | GET | `/api/v1/auth/me` | 내 정보 | ✔ |  |
+| 5 | POST | `/api/v1/analyses` | **분석 요청 생성 및 시작** | ✔ | 인찬 |
+| 6 | GET | `/api/v1/analyses` | 분석 목록 조회 | ✔ |  |
+| 7 | GET | `/api/v1/analyses/{id}` | 분석 상세(요약) 조회 | ✔ |  |
+| 8 | GET | `/api/v1/analyses/{id}/status` | **분석 진행 상태 폴링** | ✔ |  |
+| 9 | DELETE | `/api/v1/analyses/{id}` | 분석 삭제 | ✔ |  |
+| 10 | GET | `/api/v1/analyses/{id}/files` | 파일 트리 조회 | ✔ |  |
+| 11 | GET | `/api/v1/analyses/{id}/files/{fileId}` | 파일 코드 본문 조회 | ✔ |  |
+| 12 | GET | `/api/v1/analyses/{id}/findings` | 취약점 목록 조회 | ✔ |  |
+| 13 | GET | `/api/v1/findings/{findingId}` | **취약점 상세 + LLM 분석** | ✔ | 서연 |
+| 14 | PATCH | `/api/v1/findings/{findingId}/status` | 취약점 처리 상태 변경 | ✔ |  |
+| 15 | GET | `/api/v1/analyses/{id}/report` | 보고서 내보내기 | ✔ | 예빈 |
+| 16 | GET | `/api/v1/dashboard/summary` | 홈 대시보드 통계 | ✔ | 예빈 |
+
+---
+
+### 4.1 분석 요청 API
+
+#### 4.1.1 분석 요청 생성 및 시작 ⭐
+
+```yaml
+POST /api/v1/analyses
+Content-Type: application/json
+Authorization: Bearer {ACCESS_TOKEN}
+
+Request Body:
+{
+  "title": "payments-api",
+  "scanOptions": {
+    "detectSqlInjection": true,
+    "detectHardcodedSecret": true,
+    "detectXss": true
+  },
+  "files": [
+    {
+      "relativePath": "src/routes/users.ts",
+      "content": "import express from 'express';\nimport db from './database';\n\napp.get('/api/users', async (req, res) => {\n  const userId = req.query.id;\n  const query = `SELECT * FROM users WHERE id = ${userId}`;\n  const result = await db.query(query);\n  res.json(result.rows);\n});"
+    },
+    {
+      "relativePath": "src/routes/payments.ts",
+      "content": "..."
+    }
+  ]
+}
+
+Validation Rules:
+- title: 필수, 1-100자
+- files: 필수, 1-20개 (BR-A002)
+- files[].relativePath: 필수, 500자 이내, 배열 내 중복 불가 (BR-A009)
+- files[].content: 필수, 비어 있지 않음, 100KB 이하 (BR-A003)
+- 전체 content 합계: 500KB 이하 (BR-A003)
+- scanOptions: 선택, 미지정 시 3종 모두 true (화면의 `비밀 키 탐지 사용/미사용` 설정에 대응)
+
+Response (202 Accepted):
+{
+  "success": true,
+  "data": {
+    "analysisId": 128,
+    "title": "payments-api",
+    "status": "PENDING",
+    "totalFiles": 2,
+    "estimatedDurationSeconds": 45,
+    "createdAt": "2026-09-27T14:32:18"
+  },
+  "message": "분석 요청이 접수되었습니다"
+}
+
+Response (413 Payload Too Large):
+{
+  "success": false,
+  "statusCode": 413,
+  "errorCode": "CODE_SIZE_EXCEEDED",
+  "message": "전체 코드 크기가 500KB를 초과했습니다"
+}
+
+Response (400 Bad Request):
+{
+  "success": false,
+  "statusCode": 400,
+  "errorCode": "UNSUPPORTED_LANGUAGE",
+  "message": "지원하지 않는 파일 형식입니다: .png"
+}
+```
+
+**처리 흐름**
+
+```
+① 요청 검증 → ② AnalysisRequest(PENDING) + AnalysisFile N건 저장 (트랜잭션 커밋)
+→ ③ 202 즉시 응답 → ④ @Async 워커: Scanner 탐지 → LLM 설명 (§4.6 참조)
+```
+
+> `estimatedDurationSeconds`는 **추정값**이며 DB에 저장하지 않는다.
+산식: `5초(탐지) + 예상 취약점 수 × 6초` — 탐지 전에는 취약점 수를 모르므로 `파일 수 × 20초`로 근사한다. 
+(코드 분석 화면의 `예상 분석 시간 약 45초` 표시에 사용)
+> 
+
+#### 4.1.2 분석 진행 상태 조회 (폴링) ⭐
+
+```yaml
+GET /api/v1/analyses/{analysisId}/status
+Authorization: Bearer {ACCESS_TOKEN}
+
+Path Parameters:
+- analysisId: integer (required)
+
+Response (200 OK) — 탐지 단계:
+{
+  "success": true,
+  "data": {
+    "analysisId": 128,
+    "status": "SCANNING",
+    "stage": "SCAN",
+    "stageLabel": "규칙 기반 탐지 중",
+    "progress": 28,
+    "currentFile": "src/routes/users.ts",
+    "processedFiles": 1,
+    "totalFiles": 2,
+    "findingsSoFar": 3,
+    "startedAt": "2026-09-27T14:32:19"
+  }
+}
+
+Response (200 OK) — 설명 생성 단계:
+{
+  "success": true,
+  "data": {
+    "analysisId": 128,
+    "status": "EXPLAINING",
+    "stage": "EXPLAIN",
+    "stageLabel": "AI 설명 생성 중",
+    "progress": 71,
+    "totalFindings": 23,
+    "explainedFindings": 12,
+    "recentLogs": [
+      { "time": "14:32:21", "message": "동적 SQL 쿼리 발견 (SQLI-003)" },
+      { "time": "14:32:22", "message": "CWE-89 규칙과 대조" },
+      { "time": "14:32:27", "message": "AI 설명 생성 중 (12/23)" }
+    ]
+  }
+}
+
+Response (200 OK) — 완료:
+{
+  "success": true,
+  "data": {
+    "analysisId": 128,
+    "status": "COMPLETED",
+    "stage": "DONE",
+    "progress": 100,
+    "totalFiles": 2,
+    "totalFindings": 23,
+    "overallSeverity": "CRITICAL",
+    "durationSeconds": 47,
+    "completedAt": "2026-09-27T14:33:06"
+  }
+}
+
+Response (200 OK) — 실패:
+{
+  "success": true,
+  "data": {
+    "analysisId": 128,
+    "status": "FAILED",
+    "stage": "SCAN",
+    "errorMessage": "코드를 분석하는 중 오류가 발생했습니다. 다시 시도해 주세요."
+  }
+}
+```
+
+**진행률(progress) 산출 방식**
+
+| 단계 | 구간 | 산식 |
+| --- | --- | --- |
+| `SCANNING` | 0 ~ 40% | `처리 완료 파일 수 / 전체 파일 수 × 40` |
+| `EXPLAINING` | 40 ~ 100% | `40 + 설명 완료 건수 / 전체 취약점 수 × 60` |
+| 탐지 0건 | — | 탐지 종료 즉시 100% |
+
+**폴링 규칙**
+
+- 프론트엔드는 **2초 간격**으로 호출하고, `status`가 `COMPLETED` 또는 `FAILED`가 되면 중단한다.
+- 최대 폴링 시간은 **220초**(탐지 30초 + 설명 180초 + 여유)이며 초과 시 타임아웃 안내를 표시한다.
+- `recentLogs`는 최근 5건만 내려주는 **휘발성 값**이며 DB에 저장하지 않는다 (D-12).
+탐지 단계가 룰 기반이라 "어느 룰이 무엇을 발견했는지"를 즉시 알 수 있어, 화면 하단 로그를 실제 데이터로 채울 수 있다.
+
+#### 4.1.3 분석 목록 조회
+
+```yaml
+GET /api/v1/analyses
+Authorization: Bearer {ACCESS_TOKEN}
+
+Query Parameters:
+- page: integer (default: 0)
+- size: integer (default: 20, max: 50)
+- status: string - 상태 필터 (PENDING, SCANNING, EXPLAINING, COMPLETED, FAILED)
+- sort: string (default: createdAt,desc) - createdAt,desc | severity,desc
+
+Response (200 OK):
+{
+  "success": true,
+  "data": {
+    "content": [
+      {
+        "analysisId": 128,
+        "title": "payments-api",
+        "status": "COMPLETED",
+        "language": "TypeScript",
+        "overallSeverity": "CRITICAL",
+        "riskScore": 82,
+        "totalFiles": 2,
+        "totalFindings": 23,
+        "createdAt": "2026-09-27T14:32:18"
+      },
+      {
+        "analysisId": 127,
+        "title": "auth-service",
+        "status": "COMPLETED",
+        "language": "Java",
+        "overallSeverity": "HIGH",
+        "riskScore": 46,
+        "totalFiles": 5,
+        "totalFindings": 11,
+        "createdAt": "2026-09-26T10:05:44"
+      }
+    ],
+    "page": { "number": 0, "size": 20, "totalElements": 3, "totalPages": 1 }
+  }
+}
+```
+
+> `riskScore`(홈 화면의 `위험 82` 배지)는 저장 컬럼이 아니라 **응답 시 계산**한다.
+산식: `min(100, CRITICAL×20 + HIGH×10 + MEDIUM×4 + LOW×1)` — 팀 합의 후 확정 (§7 D-11)
+> 
+
+#### 4.1.4 분석 상세(요약) 조회
+
+```yaml
+GET /api/v1/analyses/{analysisId}
+Authorization: Bearer {ACCESS_TOKEN}
+
+Response (200 OK):
+{
+  "success": true,
+  "data": {
+    "analysisId": 128,
+    "title": "payments-api",
+    "status": "COMPLETED",
+    "overallSeverity": "CRITICAL",
+    "totalFiles": 2,
+    "totalFindings": 23,
+    "severityCount": { "CRITICAL": 3, "HIGH": 6, "MEDIUM": 9, "LOW": 5 },
+    "typeCount": [
+      { "type": "SQL_INJECTION",    "displayName": "SQL 삽입",          "cweId": "CWE-89",  "count": 6 },
+      { "type": "HARDCODED_SECRET", "displayName": "하드코딩된 비밀정보", "cweId": "CWE-798", "count": 12 },
+      { "type": "XSS",              "displayName": "크로스사이트 스크립팅", "cweId": "CWE-79",  "count": 5 }
+    ],
+    "ruleCount": [
+      { "ruleId": "SQLI-003",   "count": 4 },
+      { "ruleId": "SECRET-002", "count": 9 },
+      { "ruleId": "XSS-001",    "count": 5 }
+    ],
+    "resolutionRate": 0.0,
+    "durationSeconds": 47,
+    "startedAt": "2026-09-27T14:32:19",
+    "completedAt": "2026-09-27T14:33:06"
+  }
+}
+
+Response (403 Forbidden):
+{
+  "success": false,
+  "statusCode": 403,
+  "errorCode": "ACCESS_DENIED",
+  "message": "해당 분석에 접근할 권한이 없습니다"
+}
+```
+
+#### 4.1.5 분석 삭제
+
+```yaml
+DELETE /api/v1/analyses/{analysisId}
+Authorization: Bearer {ACCESS_TOKEN}
+
+Business Rules:
+- 소유자 본인만 삭제 가능 (BR-U004)
+- PENDING / SCANNING / EXPLAINING 상태는 삭제 불가 (BR-A008)
+- 삭제 시 파일·취약점·LLM 결과 함께 삭제 (BR-A009)
+
+Response (204 No Content)
+
+Response (422 Unprocessable Entity):
+{
+  "success": false,
+  "statusCode": 422,
+  "errorCode": "ANALYSIS_IN_PROGRESS",
+  "message": "진행 중인 분석은 삭제할 수 없습니다"
+}
+```
+
+---
+
+### 4.2 파일 조회 API
+
+#### 4.2.1 파일 트리 조회
+
+```yaml
+GET /api/v1/analyses/{analysisId}/files
+Authorization: Bearer {ACCESS_TOKEN}
+
+Response (200 OK):
+{
+  "success": true,
+  "data": [
+    {
+      "fileId": 501,
+      "relativePath": "src/routes/users.ts",
+      "fileName": "users.ts",
+      "language": "TypeScript",
+      "fileSizeBytes": 412,
+      "lineCount": 9,
+      "findingCount": 6,
+      "highestSeverity": "CRITICAL"
+    },
+    {
+      "fileId": 502,
+      "relativePath": "src/routes/payments.ts",
+      "fileName": "payments.ts",
+      "language": "TypeScript",
+      "fileSizeBytes": 980,
+      "lineCount": 32,
+      "findingCount": 2,
+      "highestSeverity": "MEDIUM"
+    }
+  ]
+}
+```
+
+> 코드 본문(`content`)은 **포함하지 않는다.** 트리 렌더링에 불필요하며 응답 크기만 커진다.
+프론트는 `relativePath`를 `/` 기준으로 분해해 트리를 구성한다.
+> 
+
+#### 4.2.2 파일 코드 본문 조회
+
+```yaml
+GET /api/v1/analyses/{analysisId}/files/{fileId}
+Authorization: Bearer {ACCESS_TOKEN}
+
+Response (200 OK):
+{
+  "success": true,
+  "data": {
+    "fileId": 501,
+    "relativePath": "src/routes/users.ts",
+    "language": "TypeScript",
+    "lineCount": 9,
+    "content": "import express from 'express';\n...",
+    "findingMarkers": [
+      {
+        "findingId": 9001,
+        "startLine": 5,
+        "endLine": 8,
+        "severity": "CRITICAL",
+        "label": "SQL 삽입 가능성"
+      }
+    ]
+  }
+}
+```
+
+> `findingMarkers`는 코드 뷰어에서 하이라이트할 라인 정보이다.
+코드 본문과 마커를 한 번에 내려주어 화면 진입 시 요청 수를 줄인다.
+> 
+
+---
+
+### 4.3 취약점 API
+
+#### 4.3.1 취약점 목록 조회
+
+```yaml
+GET /api/v1/analyses/{analysisId}/findings
+Authorization: Bearer {ACCESS_TOKEN}
+
+Query Parameters:
+- type: string - 유형 필터 (SQL_INJECTION | HARDCODED_SECRET | XSS)
+- ruleId: string - 룰 필터 (예: SQLI-003)
+- severity: string - 심각도 필터 (CRITICAL, HIGH, MEDIUM, LOW), 콤마 구분 다중 허용
+- status: string - 처리 상태 필터 (OPEN, RESOLVED, IGNORED), 기본값: 전체
+- fileId: integer - 특정 파일로 한정
+- page, size: 페이지네이션 (default: 0 / 50)
+
+Response (200 OK):
+{
+  "success": true,
+  "data": {
+    "content": [
+      {
+        "findingId": 9001,
+        "fileId": 501,
+        "relativePath": "src/routes/users.ts",
+        "ruleId": "SQLI-003",
+        "ruleTitle": "템플릿 리터럴 SQL 삽입",
+        "vulnerabilityType": "SQL_INJECTION",
+        "displayName": "SQL 삽입 취약점",
+        "cweId": "CWE-89",
+        "severity": "CRITICAL",
+        "status": "OPEN",
+        "startLine": 6,
+        "endLine": 6,
+        "codeSnippet": "const query = `SELECT * FROM users WHERE id = ${userId}`;",
+        "llmStatus": "SUCCESS",
+        "confidence": 97,
+        "verdict": "TRUE_POSITIVE",
+        "summary": "사용자 입력값이 검증 없이 SQL 쿼리 문자열에 직접 삽입됩니다."
+      }
+    ],
+    "page": { "number": 0, "size": 50, "totalElements": 23, "totalPages": 1 }
+  }
+}
+```
+
+> 목록에서는 LLM 분석 전문을 내려주지 않고 `summary`(explanation 앞 120자)만 포함한다.
+`confidence` / `verdict`는 화면 배지용으로 요약만 포함하며, 전문은 상세 API(§4.3.2)에서 조회한다.
+**`llmStatus`가 `FAILED`여도 탐지 결과는 그대로 내려간다** (BR-L007). 설명 없이 위치·룰 정보만 표시된다.
+> 
+
+#### 4.3.2 취약점 상세 조회 (LLM 분석 포함)
+
+```yaml
+GET /api/v1/findings/{findingId}
+Authorization: Bearer {ACCESS_TOKEN}
+
+Response (200 OK):
+{
+  "success": true,
+  "data": {
+    "findingId": 9001,
+    "analysisId": 128,
+    "file": {
+      "fileId": 501,
+      "relativePath": "src/routes/users.ts",
+      "language": "TypeScript"
+    },
+    "detection": {
+      "ruleId": "SQLI-003",
+      "ruleTitle": "템플릿 리터럴 SQL 삽입",
+      "ruleDescription": "SQL 문자열 안에서 ${} 보간으로 외부 입력을 직접 결합하고 있습니다.",
+      "matchedText": "`SELECT * FROM users WHERE id = ${userId}`"
+    },
+    "vulnerabilityType": "SQL_INJECTION",
+    "displayName": "SQL 삽입 취약점",
+    "cweId": "CWE-89",
+    "severity": "CRITICAL",
+    "status": "OPEN",
+    "startLine": 6,
+    "endLine": 6,
+    "llmAnalysis": {
+      "status": "SUCCESS",
+      "verdict": "TRUE_POSITIVE",
+      "confidence": 97,
+      "explanation": "사용자가 전달한 query 파라미터를 검증 없이 템플릿 리터럴로 SQL 문자열에 결합하고 있습니다.",
+      "riskDescription": "공격자가 id 파라미터에 SQL 구문을 넣어 users 테이블 전체를 조회하거나 다른 테이블의 데이터를 탈취할 수 있습니다.",
+      "attackScenario": "GET /api/users?id=1 OR 1=1 을 호출하면 조건이 항상 참이 되어 전체 사용자 정보가 응답됩니다.",
+      "remediation": "문자열 결합을 제거하고 매개변수화 쿼리(Prepared Statement)를 사용하며, 입력 ID의 형식을 검증하세요.",
+      "modelName": "claude-sonnet-4-6",
+      "promptVersion": "v1.0"
+    },
+    "beforeCode": {
+      "startLine": 5,
+      "lines": [
+        "const userId = req.query.id;",
+        "const query = `SELECT * FROM users WHERE id = ${userId}`;",
+        "const result = await db.query(query);"
+      ]
+    },
+    "afterCode": {
+      "startLine": 5,
+      "lines": [
+        "const userId = validateUserId(req.query.id);",
+        "const query = 'SELECT * FROM users WHERE id = $1';",
+        "const result = await db.query(query, [userId]);"
+      ]
+    }
+  }
+}
+
+Response (404 Not Found):
+{
+  "success": false,
+  "statusCode": 404,
+  "errorCode": "FINDING_NOT_FOUND",
+  "message": "취약점을 찾을 수 없습니다"
+}
+```
+
+> `beforeCode` / `afterCode`는 결과 화면 하단의 **BEFORE / AFTER 비교 영역**에 그대로 대응된다.
+`beforeCode`는 `AnalysisFile.extractSnippet(startLine, endLine)` 결과,
+`afterCode`는 `LlmAnalysis.fixedCode`를 줄 단위로 분해한 값이다.
+> 
+> 
+> **`detection` 블록은 Scanner가 만든 값, `llmAnalysis` 블록은 LLM이 만든 값이다.**
+> 화면에서도 두 출처를 구분해 표시하면 "무엇이 탐지했고 무엇이 AI 설명인지"가 분명해진다.
+> `llmAnalysis.status`가 `FAILED`인 경우에도 `detection`과 `beforeCode`는 정상적으로 내려간다.
+> 
+
+#### 4.3.3 취약점 처리 상태 변경
+
+```yaml
+PATCH /api/v1/findings/{findingId}/status
+Content-Type: application/json
+Authorization: Bearer {ACCESS_TOKEN}
+
+Request Body:
+{
+  "status": "RESOLVED"
+}
+
+Validation Rules:
+- status: 필수, OPEN | RESOLVED | IGNORED 중 하나
+
+Business Rules:
+- 이미 RESOLVED 인 항목을 다시 RESOLVED 로 변경 불가 (409)
+- IGNORED 처리 시 대시보드 통계에서 제외 (BR-S013)
+
+Response (200 OK):
+{
+  "success": true,
+  "data": {
+    "findingId": 9001,
+    "status": "RESOLVED",
+    "updatedAt": "2026-09-27T15:10:02"
+  },
+  "message": "취약점 상태가 변경되었습니다"
+}
+
+Response (409 Conflict):
+{
+  "success": false,
+  "statusCode": 409,
+  "errorCode": "ALREADY_RESOLVED",
+  "message": "이미 해결 처리된 취약점입니다"
+}
+```
+
+---
+
+### 4.4 보고서 및 대시보드 API
+
+#### 4.4.1 보고서 내보내기
+
+```yaml
+GET /api/v1/analyses/{analysisId}/report
+Authorization: Bearer {ACCESS_TOKEN}
+
+Query Parameters:
+- format: string (default: json) - json | markdown
+
+Response (200 OK, format=json):
+{
+  "success": true,
+  "data": {
+    "title": "payments-api",
+    "generatedAt": "2026-09-27T15:20:00",
+    "summary": {
+      "totalFiles": 2,
+      "totalFindings": 23,
+      "severityCount": { "CRITICAL": 3, "HIGH": 6, "MEDIUM": 9, "LOW": 5 },
+      "resolutionRate": 0.13
+    },
+    "findings": [ ]
+  }
+}
+
+Response (200 OK, format=markdown):
+Content-Type: text/markdown; charset=UTF-8
+Content-Disposition: attachment; filename="codeguard-report-128.md"
+
+# CodeGuard AI 보안 분석 보고서 — payments-api
+...
+```
+
+> 결과 화면 우상단 `보고서 내보내기` 버튼에 대응한다.
+PDF 변환은 MVP 범위 밖이며, 필요 시 프론트에서 마크다운을 렌더링해 인쇄한다.
+> 
+
+#### 4.4.2 홈 대시보드 통계
+
+```yaml
+GET /api/v1/dashboard/summary
+Authorization: Bearer {ACCESS_TOKEN}
+
+Query Parameters:
+- days: integer (default: 30) - 집계 기간
+
+Response (200 OK):
+{
+  "success": true,
+  "data": {
+    "weeklyAnalysisCount": 128,
+    "weeklyAnalysisDelta": 0.18,
+    "totalFindings": 47,
+    "criticalCount": 3,
+    "resolutionRate": 0.864,
+    "resolutionRateDelta": 0.062,
+    "averageDurationSeconds": 138,
+    "severityTrend": [
+      { "date": "2026-09-20", "critical": 1, "high": 2, "medium": 4, "low": 3 },
+      { "date": "2026-09-21", "critical": 0, "high": 3, "medium": 5, "low": 2 }
+    ],
+    "typeDistribution": [
+      { "type": "MISSING_INPUT_VALIDATION", "displayName": "입력값 검증", "count": 18, "ratio": 0.38 },
+      { "type": "WEAK_AUTHENTICATION",      "displayName": "인증·세션",   "count": 14, "ratio": 0.30 },
+      { "type": "SENSITIVE_DATA_LOGGING",   "displayName": "민감정보",     "count": 9,  "ratio": 0.19 }
+    ],
+    "recentAnalyses": [
+      { "analysisId": 128, "title": "payments-api", "language": "TypeScript",
+        "riskScore": 82, "createdAt": "2026-09-27T14:32:18" }
+    ]
+  }
+}
+```
+
+> 홈 화면의 4개 지표 카드 / `위험 추세·심각도` 차트 / `취약점 유형` 바 / `최근 분석` 목록을
+**한 번의 호출**로 채운다 (화면 진입 시 요청 수 최소화).
+> 
+
+---
+
+### 4.5 LLM 내부 서비스 API (FastAPI)
+
+> **외부에 노출하지 않는 내부 전용 API**이다. Spring Boot만 호출한다 (BR-L011).
+**v1.1 변경**: 탐지는 Spring Boot 내부 Scanner가 수행하므로, LLM 서비스는 **이미 탐지된 취약점 1건을 설명**하는 역할만 한다.
+> 
+
+#### 4.5.1 취약점 설명 생성
+
+```yaml
+POST /internal/llm/explain
+Content-Type: application/json
+X-Internal-Token: {INTERNAL_SHARED_SECRET}
+
+Request Body:
+{
+  "findingId": 9001,
+  "promptVersion": "v1.0",
+  "rule": {
+    "ruleId": "SQLI-003",
+    "vulnerabilityType": "SQL_INJECTION",
+    "cweId": "CWE-89",
+    "severity": "CRITICAL",
+    "title": "템플릿 리터럴 SQL 삽입",
+    "description": "SQL 문자열 안에서 ${} 보간으로 외부 입력을 직접 결합하고 있습니다."
+  },
+  "location": {
+    "relativePath": "src/routes/users.ts",
+    "language": "TypeScript",
+    "startLine": 6,
+    "endLine": 6
+  },
+  "codeContext": {
+    "startLine": 1,
+    "endLine": 9,
+    "lines": [
+      "1: import express from 'express';",
+      "2: import db from './database';",
+      "3: ",
+      "4: app.get('/api/users', async (req, res) => {",
+      "5:   const userId = req.query.id;",
+      "6:   const query = `SELECT * FROM users WHERE id = ${userId}`;",
+      "7:   const result = await db.query(query);",
+      "8:   res.json(result.rows);",
+      "9: });"
+    ]
+  }
+}
+
+Response (200 OK):
+{
+  "findingId": 9001,
+  "modelName": "claude-sonnet-4-6",
+  "promptVersion": "v1.0",
+  "promptTokens": 612,
+  "completionTokens": 480,
+  "verdict": "TRUE_POSITIVE",
+  "confidence": 97,
+  "explanation": "req.query.id 로 받은 값을 검증 없이 템플릿 리터럴에 넣어 SQL 문을 만들고 있습니다.",
+  "riskDescription": "공격자가 id 파라미터에 SQL 구문을 넣어 users 테이블 전체를 조회하거나 다른 테이블 데이터를 탈취할 수 있습니다.",
+  "attackScenario": "GET /api/users?id=1 OR 1=1 을 호출하면 조건이 항상 참이 되어 전체 사용자 정보가 응답됩니다.",
+  "remediation": "문자열 보간을 제거하고 매개변수화 쿼리를 사용하며, 입력 ID의 형식을 검증하세요.",
+  "fixedCode": "const userId = validateUserId(req.query.id);\nconst query = 'SELECT * FROM users WHERE id = $1';\nconst result = await db.query(query, [userId]);",
+  "rawResponse": "{...LLM 원본 응답 전문...}"
+}
+
+Response (422 Unprocessable Entity) — 응답 스키마 검증 실패:
+{
+  "findingId": 9001,
+  "errorCode": "LLM_SCHEMA_INVALID",
+  "message": "LLM 응답이 정의된 JSON 스키마를 만족하지 않습니다",
+  "rawResponse": "{...}"
+}
+
+Response (504 Gateway Timeout):
+{
+  "findingId": 9001,
+  "errorCode": "LLM_TIMEOUT",
+  "message": "LLM 응답 시간이 초과되었습니다"
+}
+```
+
+**요청 설계 포인트**
+
+| 항목 | 방침 | 이유 |
+| --- | --- | --- |
+| 호출 단위 | 취약점 **1건당 1회** | 프롬프트가 단순해져 응답 품질·파싱 안정성이 높다 |
+| 코드 범위 | 취약 라인 기준 **±20줄** | 파일 전체를 보내지 않아 토큰을 크게 절감한다 |
+| 라인 번호 | `"6: const query = ..."` 형식으로 **번호를 붙여 전달** | LLM이 어느 줄을 설명하는지 혼동하지 않는다 |
+| 룰 정보 전달 | `rule.description`을 함께 전달 | 무엇이 왜 걸렸는지 LLM이 이미 알고 시작하므로 설명이 정확해진다 |
+| 심각도 | 요청에 포함하되 **응답에서 받지 않음** | 심각도는 룰이 결정한다 (BR-L002) |
+
+**응답 스키마 계약**
+
+| 필드 | 타입 | 필수 | 허용값 / 제약 | 누락·오류 시 처리 |
+| --- | --- | --- | --- | --- |
+| `verdict` | string | ✖ | TRUE_POSITIVE / FALSE_POSITIVE / UNCERTAIN | `UNCERTAIN` 저장 |
+| `confidence` | integer | ✖ | 0~100 | null 저장 |
+| `explanation` | string | ✔ | 1자 이상 | 누락 시 스키마 검증 실패 → 재시도 |
+| `riskDescription` | string | ✖ | — | null 저장 |
+| `attackScenario` | string | ✖ | — | null 저장 |
+| `remediation` | string | ✔ | 1자 이상 | 누락 시 스키마 검증 실패 → 재시도 |
+| `fixedCode` | string | ✖ | — | null이면 AFTER 영역 미표시 |
+| **(금지)** `severity`, `startLine`, `vulnerabilityType` | — | — | — | **응답에 있어도 무시한다.** LLM은 탐지 결과를 바꿀 수 없다 (BR-L002) |
+
+**프롬프트 설계 방침 (요약)**
+
+1. 시스템 프롬프트에서 역할을 "보안 코드 리뷰어"로 고정하고 **JSON만 출력**하도록 지시한다.
+2. **"이미 탐지된 취약점을 설명하는 역할"임을 명시**한다. 새 취약점을 찾거나 심각도를 바꾸지 말라고 못박는다.
+3. 룰의 `title`·`description`을 함께 주어 설명의 방향을 고정한다.
+4. 설명은 "보안 비전공 개발자가 읽는다"는 조건을 포함한다.
+5. `fixedCode`는 **해당 구간만** 교체 가능한 형태로 출력하도록 요구한다 (파일 전체 재작성 금지).
+6. 탐지가 오탐으로 보이면 설명을 지어내지 말고 `verdict: FALSE_POSITIVE`와 그 이유를 `explanation`에 쓰도록 지시한다.
+7. 프롬프트 변경 시 `promptVersion`을 올리고 DB에 함께 기록한다 (BR-L009).
+
+#### 4.5.2 헬스체크
+
+```yaml
+GET /internal/llm/health
+
+Response (200 OK):
+{ "status": "UP", "model": "claude-sonnet-4-6", "promptVersion": "v1.0" }
+```
+
+> Spring Boot 기동 시 1회 호출해 LLM 서비스 가용 여부를 로그로 남긴다.
+**LLM 서비스가 내려가 있어도 탐지 단계는 정상 동작한다.** 이 경우 취약점은 저장되고 설명만 비어 있게 된다.
+> 
+
+### 4.6 비동기 분석 처리 흐름 (내부 동작)
+
+```
+[React]  POST /api/v1/analyses
+              │
+              ▼
+[Spring] AnalysisService.createAndStart()
+         ├─ 검증 + AnalysisRequest(PENDING) + AnalysisFile N건 저장  (트랜잭션 커밋)
+         └─ 202 Accepted 반환 { analysisId }
+              │
+              ▼  (@Async, 별도 스레드)
+[Spring] AnalysisWorker.run(analysisId)
+         │
+         ├─ ① request.startScanning()                      → 상태 SCANNING
+         │   for each AnalysisFile:
+         │      RuleCatalog.forLanguage(file.language)
+         │        → 라인 단위 정규식 매칭
+         │        → 오탐 제외 조건 적용 (주석/환경변수/바인딩)
+         │        → 중복 병합
+         │        → FindingVulnerability 저장
+         │   ▸ 이 시점에 "무엇이 몇 건"이 확정된다
+         │
+         ├─ ② 탐지 0건이면 → request.complete(null) → 종료      (BR-A006)
+         │
+         ├─ ③ request.startExplaining(totalFindings)        → 상태 EXPLAINING
+         │   findings 를 4건씩 병렬로:
+         │      POST http://localhost:8000/internal/llm/explain
+         │        ├─ 성공 → LlmAnalysis(SUCCESS) 저장
+         │        └─ 실패 → 1회 재시도 → LlmAnalysis(FAILED) 저장, 계속 진행 (BR-L007)
+         │
+         ├─ ④ request.complete(overallSeverity)             → 상태 COMPLETED
+         └─ Scanner 단계 예외 시 request.fail(message)       → 상태 FAILED
+              │
+              ▼
+[React]  GET /api/v1/analyses/{id}/status  (2초 간격 폴링)
+         → COMPLETED 시 결과 화면으로 이동
+```
+
+| 항목 | 값 |
+| --- | --- |
+| 스레드 풀 (분석 워커) | core 2 / max 4 / queue 50 |
+| LLM 병렬 호출 | 분석 1건당 최대 4 동시 |
+| Scanner 타임아웃 | 30초 |
+| LLM 단계 전체 타임아웃 | 180초 |
+| 재시도 | LLM 호출 실패 시 건별 1회 |
+| 트랜잭션 경계 | 접수(동기) / 탐지 저장 / 설명 저장을 각각 분리 |
+| 부분 실패 정책 | **LLM 실패는 분석 실패가 아니다.** 탐지 결과는 그대로 보존 |
+
+> **이 구조의 장점**: 탐지가 수초 내에 끝나므로, LLM이 느리거나 실패해도
+사용자는 "어디에 무슨 취약점이 있는지"를 이미 볼 수 있다.
+LLM에 전부 의존할 때와 달리 **서비스가 부분적으로라도 항상 동작한다.**
+> 
+
+## 5. 에러 코드 및 처리
+
+### 5.1 표준 에러 코드 정의
+
+| 코드 | HTTP 상태 | 설명 | 해결 방법 |
+| --- | --- | --- | --- |
+| **VALIDATION_ERROR** | 400 | 입력값 검증 실패 | fieldErrors 확인 후 재시도 |
+| **INVALID_CREDENTIALS** | 401 | 인증 정보 오류 | 로그인 정보 확인 |
+| **TOKEN_EXPIRED** | 401 | 토큰 만료 | 재로그인 |
+| **ACCESS_DENIED** | 403 | 소유자가 아님 | 본인 분석만 접근 가능 |
+| **RESOURCE_NOT_FOUND** | 404 | 리소스 없음 | ID 확인 |
+| **DUPLICATE_RESOURCE** | 409 | 중복 생성 시도 | 기존 리소스 확인 |
+| **BUSINESS_RULE_VIOLATION** | 422 | 비즈니스 규칙 위반 | 규칙 확인 |
+| **INTERNAL_SERVER_ERROR** | 500 | 서버 내부 오류 | 관리자 문의 |
+
+### 5.2 비즈니스 에러 코드
+
+| 코드 | HTTP | 설명 | 관련 규칙 |
+| --- | --- | --- | --- |
+| **EMAIL_DUPLICATE** | 409 | 이미 사용 중인 이메일 | BR-U001 |
+| **ANALYSIS_NOT_FOUND** | 404 | 분석 요청을 찾을 수 없음 | — |
+| **FINDING_NOT_FOUND** | 404 | 취약점을 찾을 수 없음 | — |
+| **FILE_NOT_FOUND** | 404 | 파일을 찾을 수 없음 | — |
+| **FILE_COUNT_EXCEEDED** | 413 | 파일 수 20개 초과 | BR-A002 |
+| **FILE_SIZE_EXCEEDED** | 413 | 파일 1개 100KB 초과 | BR-A003 |
+| **CODE_SIZE_EXCEEDED** | 413 | 총 코드 500KB 초과 | BR-A003 |
+| **DUPLICATE_FILE_PATH** | 400 | 동일 경로 파일 중복 | BR-A008 |
+| **UNSUPPORTED_LANGUAGE** | 400 | 지원하지 않는 확장자 | — |
+| **EMPTY_FILE_LIST** | 400 | 파일이 1개 미만 | BR-A001 |
+| **ANALYSIS_IN_PROGRESS** | 422 | 진행 중이라 삭제 불가 | BR-A007 |
+| **INVALID_ANALYSIS_STATUS** | 422 | 허용되지 않는 상태 전이 | BR-A004 |
+| **ALREADY_RESOLVED** | 409 | 이미 해결된 취약점 | — |
+| **INVALID_LINE_RANGE** | 400 | startLine > endLine | BR-S012 |
+| **SCAN_FAILED** | 500 | Scanner 실행 중 오류 | BR-S001 |
+| **SCAN_TIMEOUT** | 500 | 탐지 30초 초과 | BR-A007 |
+
+**LLM 관련 오류는 API 응답으로 노출되지 않는다.**
+LLM 호출은 비동기 워커 내부에서만 일어나고, 실패해도 분석은 완료되기 때문이다 (BR-L007).
+아래 코드는 `llm_analysis.error_message`에만 기록되며 클라이언트는 `llmStatus: "FAILED"`로 인지한다.
+
+| 내부 코드 | 설명 | 화면 동작 |
+| --- | --- | --- |
+| **LLM_SERVICE_UNAVAILABLE** | LLM 서비스 연결 실패 | 해당 취약점에 "AI 설명을 생성하지 못했습니다" 표시 |
+| **LLM_TIMEOUT** | LLM 응답 시간 초과 | 동일 |
+| **LLM_SCHEMA_INVALID** | 응답 스키마 검증 실패 (재시도 후에도) | 동일 |
+
+### 5.3 전역 예외 처리 구조
+
+```java
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBusiness(BusinessException e) {
+        ErrorCode code = e.getErrorCode();
+        return ResponseEntity.status(code.getHttpStatus())
+                .body(ApiResponse.error(code, e.getMessage()));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException e) {
+        List<FieldErrorDto> fieldErrors = e.getBindingResult().getFieldErrors().stream()
+                .map(fe -> new FieldErrorDto(fe.getField(), fe.getDefaultMessage()))
+                .toList();
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.validationError(fieldErrors));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error(ErrorCode.ACCESS_DENIED));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception e) {
+        log.error("Unexpected error", e);   // 스택트레이스는 로그에만, 응답에는 노출 금지
+        return ResponseEntity.internalServerError()
+                .body(ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR));
+    }
+}
+```
+
+---
+
+## 6. API 문서화
+
+### 6.1 OpenAPI 3.0 스펙 예시
+
+```yaml
+openapi: 3.0.3
+info:
+  title: CodeGuard AI API
+  description: LLM 기반 웹 보안 코드 분석 플랫폼 REST API
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: 로컬 개발 서버
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+paths:
+  /analyses:
+    post:
+      summary: 분석 요청 생성 및 시작
+      tags: [Analyses]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAnalysisRequest'
+      responses:
+        '202':
+          description: 분석 요청 접수됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisAcceptedResponse'
+        '413':
+          description: 코드 크기 초과
+```
+
+### 6.2 Swagger 설정
+
+```java
+@Configuration
+public class SwaggerConfig {
+
+    @Bean
+    public OpenAPI customOpenAPI() {
+        return new OpenAPI()
+                .info(new Info()
+                        .title("CodeGuard AI API")
+                        .version("v1.0.0")
+                        .description("LLM 기반 웹 보안 코드 분석 플랫폼 REST API"))
+                .addSecurityItem(new SecurityRequirement().addList("BearerAuth"))
+                .components(new Components()
+                        .addSecuritySchemes("BearerAuth",
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.HTTP)
+                                        .scheme("bearer")
+                                        .bearerFormat("JWT")));
+    }
+}
+```
+
+> Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+> 
+
+---
+
+## 7. 체크리스트 및 품질 관리
+
+### 7.1 API 설계 체크리스트
+
+```
+☑ RESTful 원칙을 준수하는가?
+☑ URL 네이밍 규칙이 일관되는가? (analyses 철자 포함)
+☑ HTTP 메서드를 올바르게 사용하는가?
+☑ 비동기 작업에 202 + 폴링 구조를 적용했는가?
+☑ 요청/응답 형식이 표준화되어 있는가?
+☑ 에러 응답에 errorCode 가 포함되는가?
+☑ 목록 API에 페이지네이션이 있는가?
+☑ 모든 분석 API에 소유권 검사가 적용되는가?
+```
+
+### 7.2 보안 체크리스트 (보안 서비스이므로 특히 중요)
+
+```
+☑ 로그인 실패 메시지가 계정 존재 여부를 노출하지 않는가?
+☑ 비밀번호가 어떤 응답에도 포함되지 않는가?
+☑ 타인의 analysisId / findingId 접근 시 403 을 반환하는가?
+☑ 사용자가 업로드한 코드 본문이 로그에 기록되지 않는가? (BR-L004)
+☑ 스택트레이스·SQL 오류가 응답에 노출되지 않는가?
+☑ LLM 내부 API가 외부에서 호출 불가능한가? (BR-L011)
+☑ 파일 크기·개수 제한이 서버 측에서 검증되는가?
+☑ CORS 허용 오리진이 와일드카드(*)가 아닌가?
+```
+
+### 7.3 성능 체크리스트
+
+```
+☑ 취약점 목록 조회 시 N+1 이 발생하지 않는가?
+☑ 파일 트리 조회에 코드 본문(content)이 포함되지 않는가?
+☑ 대시보드 통계가 단일 요청으로 처리되는가?
+☑ 폴링 API가 가벼운 쿼리만 수행하는가?
+```
+
+---
+
+## 8. 마무리
+
+### 8.1 주요 포인트 요약
+
+1. **2단계 비동기 파이프라인**: `POST /analyses` → `202` → `SCANNING`(탐지) → `EXPLAINING`(설명) → `COMPLETED`.
+폴링 응답의 `stage`로 두 단계를 구분해 화면에 표시한다.
+2. **탐지와 설명의 출처 분리**: 응답의 `detection` 블록은 Scanner가, `llmAnalysis` 블록은 LLM이 만든 값이다.
+`ruleId`를 항상 함께 내려 어느 룰이 탐지했는지 추적할 수 있게 한다.
+3. **부분 실패 허용**: LLM 호출이 실패해도 탐지 결과는 그대로 조회된다. 분석 전체가 실패하지 않는다.
+4. **소유권 기반 인가**: 역할이 아닌 소유권으로 접근을 제어한다.
+
+### 8.2 미확정 / 논의 필요 항목
+
+| No | 논점 | 현재 설계 | 결정 필요 사항 |
+| --- | --- | --- | --- |
+| **D-10** | 진행 상황 전달 방식 | 2초 폴링 + `recentLogs` | 룰 기반 탐지라 로그 내용이 실제로 존재하므로 폴링으로도 화면 구현 가능. SSE는 선택 사항으로 격하 |
+| **D-11** | `riskScore` 산식 | CRITICAL×20 + HIGH×10 + MEDIUM×4 + LOW×1 | 홈 화면 `위험 82` 배지 기준 확정 필요 |
+| **D-12** | 분석 로그 저장 여부 | 저장하지 않음 (휘발성) | 저장한다면 `analysis_log` 테이블 추가 필요 |
+| **D-13** | 즐겨찾기 / 보관됨 | API 미정의 | MVP 포함 여부 결정 (포함 시 `is_favorite`, `is_archived` 컬럼) |
+| **D-14** | 보고서 PDF 지원 | markdown / json만 | PDF 필요 시 방식 결정 |
+| **D-18** | `scanOptions` 저장 여부 | 요청에만 존재, 미저장 | 재분석 시 동일 옵션 재현이 필요하면 `analysis_request.scan_options JSON` 추가 |
+| **D-19** | LLM 호출 단위 | 취약점 1건당 1회 | 취약점이 50건이면 호출 50회. 토큰·시간 부담이 크면 "같은 룰끼리 묶어 1회 호출"로 변경 검토 |
+| **D-20** | `verdict: FALSE_POSITIVE` 처리 | 배지 표시만, 자동 제외 안 함 | 목록에서 기본 숨김 처리할지 팀 결정 필요 |
+
+### 8.3 추천 도구
+
+- **문서화**: springdoc-openapi (Swagger UI), Postman Collection
+- **테스트**: `@SpringBootTest` + MockMvc, FastAPI는 `TestClient`
+
+---

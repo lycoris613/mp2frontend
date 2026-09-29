@@ -1,0 +1,273 @@
+| 항목 | 내용 |
+| --- | --- |
+| **프로젝트명** | CodeGuard AI |
+| **작성자** | 홍서연 |
+| **작성일** | 2026-09-27 |
+| **버전** | v1.1 (Draft — 규칙 기반 탐지 확정 반영) |
+| **검토자** | [검토자명] |
+
+| 컴포넌트 | ① 재사용? | ② 독립 변경? | ③ 길이? | 판정 |
+| --- | --- | --- | --- | --- |
+| `Sidebar` | ✔ 전 화면 | ✔ | 100줄+ | 공통 컴포넌트 |
+| `FileTree` | ✔ SCR-002/003 | ✔ 파일 선택만 담당 | 80줄 | 공통 컴포넌트 |
+| `CodeViewer` | ✔ SCR-002/003 | ✔ 코드만 렌더 | 90줄 | 공통 컴포넌트 |
+| `SeverityBadge` | ✔ 5곳 이상 | ✔ | 20줄 | 공통 컴포넌트 |
+| `VulnerabilityTypeTabs` | ✖ SCR-003만 | ✔ 탭 상태만 | 50줄 | 페이지 전용 |
+| `FindingDetailPanel` | ✖ | ✔ 선택 취약점만 | 100줄+ | 페이지 전용 |
+| `CodeDiffPanel` | ✖ | ✔ | 60줄 | 페이지 전용 |
+| `AnalysisProgressPanel` | ✖ SCR-002만 | ✔ 폴링 결과만 | 80줄 | 페이지 전용 |
+
+| 상태 | 위치 | 이유 |
+| --- | --- | --- |
+| `token`, `user` | `authStore` (persist) | 앱 전체 인증 판단, 새로고침 유지 필요 |
+| `summary` (대시보드 통계) | `dashboardStore` | HomePage 전용이지만 재진입 시 캐시 활용 |
+| `analyses` (분석 목록) | `analysisStore` | Sidebar + AnalysisListPage + HomePage 3곳에서 공유 |
+| `currentAnalysis`, `files`, `findings` | `analysisStore` | FindingResultPage 내 여러 자식이 공유 |
+| `selectedFinding` (상세 + LLM) | `analysisStore` | 상세 패널 + Diff 패널이 동시에 참조 |
+| `pollingStatus` (진행률) | `analysisStore` | CodeAnalysisPage와 Sidebar 배지가 공유 |
+| `draftFiles` (입력 중인 코드) | 로컬 `useState` | CodeAnalysisPage 안에서만 사용, 서버 무관 |
+| `activeFileId` | 로컬 `useState` | 화면 내 선택 상태, 서버 무관 |
+| `activeTypeTab` | 로컬 `useState` | UI 필터, 서버 무관 |
+| `isDeleteModalOpen` | 로컬 `useState` | UI 열림/닫힘 |
+| `codeScope` (이 취약점만/전체) | 로컬 `useState` | 표시 범위 토글 |
+
+| 구분 | 컴포넌트명 | 파일 위치 | 주요 책임 |
+| --- | --- | --- | --- |
+| **레이아웃** | `ProtectedLayout` | `layouts/ProtectedLayout.jsx` | 토큰 검사, Sidebar + Outlet 배치 |
+| **레이아웃** | `Sidebar` | `components/layout/Sidebar.jsx` | 네비게이션, 분석 목록, 필터 칩 |
+| **레이아웃** | `PageHeader` | `components/layout/PageHeader.jsx` | 제목/서브타이틀/우측 액션 슬롯 |
+| **페이지** | `HomePage` | `pages/Home/index.jsx` | 대시보드 조립 |
+| **페이지** | `CodeAnalysisPage` | `pages/CodeAnalysis/index.jsx` | 코드 입력 + 분석 실행 + 폴링 |
+| **페이지** | `FindingResultPage` | `pages/FindingResult/index.jsx` | 결과 조립, 선택 상태 관리 |
+| **페이지** | `AnalysisListPage` | `pages/AnalysisList/index.jsx` | 목록/필터/삭제 |
+| **페이지** | `LoginPage` / `SignupPage` | `pages/Auth/` | 인증 폼 |
+| **기능** | `HeroBanner` | `pages/Home/components/` | 히어로 배너 + CTA |
+| **기능** | `MetricCard` | `pages/Home/components/` | 지표 카드 1장 |
+| **기능** | `RecentAnalysisList` | `pages/Home/components/` | 최근 분석 목록 |
+| **기능** | `SeverityTrendChart` | `pages/Home/components/` | 일자별 심각도 막대 (SVG) |
+| **기능** | `TypeDistributionBar` | `pages/Home/components/` | 유형 분포 바 |
+| **기능** | `AnalysisSettingsPanel` | `pages/CodeAnalysis/components/` | 언어/범위/예상시간/시작 버튼 |
+| **기능** | `AnalysisProgressPanel` | `pages/CodeAnalysis/components/` | 진행바 + 로그 |
+| **기능** | `VulnerabilityTypeTabs` | `pages/FindingResult/components/` | 유형별 탭 필터 |
+| **기능** | `SeveritySummary` | `pages/FindingResult/components/` | 전체/심각도 카운터 |
+| **기능** | `FindingDetailPanel` | `pages/FindingResult/components/` | AI 설명·권장 조치 |
+| **기능** | `CodeDiffPanel` | `pages/FindingResult/components/` | BEFORE/AFTER 비교 |
+| **공통** | `FileTree` | `components/common/FileTree.jsx` | 파일 트리 렌더 + 선택 |
+| **공통** | `CodeViewer` | `components/common/CodeViewer.jsx` | 라인번호 + 취약 라인 하이라이트 |
+| **공통** | `CodeEditor` | `components/common/CodeEditor.jsx` | 코드 입력(textarea + 라인번호) |
+| **공통** | `SeverityBadge` | `components/common/SeverityBadge.jsx` | 심각도 배지 |
+| **공통** | `LoadingSpinner` | `components/common/LoadingSpinner.jsx` | 로딩 표시 |
+| **공통** | `EmptyState` | `components/common/EmptyState.jsx` | 빈 데이터 안내 |
+| **공통** | `ErrorMessage` | `components/common/ErrorMessage.jsx` | 오류 + 재시도 |
+| **공통** | `Pagination` | `components/common/Pagination.jsx` | 페이지 이동 |
+| **공통** | `ConfirmModal` | `components/common/ConfirmModal.jsx` | 삭제 확인 |
+| **공통** | `Toast` | `components/common/Toast.jsx` | 알림 (uiStore 구독) |
+
+| 컴포넌트 | 타입 | 복잡도 | 상태 관리 |
+| --- | --- | --- | --- |
+| `HomePage` | 페이지 | 복합 (100줄+) | Zustand 연결 |
+| `CodeAnalysisPage` | 페이지 | 복합 (100줄+) | 로컬 + Zustand |
+| `FindingResultPage` | 페이지 | 복합 (100줄+) | 로컬 + Zustand |
+| `AnalysisListPage` | 페이지 | 보통 (50-100줄) | Zustand 연결 |
+| `ProtectedLayout` | 레이아웃 | 단순 (50줄 이하) | Zustand (authStore) |
+| `Sidebar` | 레이아웃 | 복합 | Zustand 연결 |
+| `FileTree` | 공통 | 보통 | 상태 없음 (순수 표시) |
+| `CodeViewer` | 공통 | 보통 | 상태 없음 |
+| `SeverityBadge` | 공통 | 단순 | 상태 없음 |
+| `FindingDetailPanel` | 기능 | 복합 | 로컬 상태만 (토글) |
+| `AnalysisProgressPanel` | 기능 | 보통 | 상태 없음 (Props로 수신) |
+
+| 컴포넌트명 | 파일 위치 | 주요 책임 | 재사용성 |
+| --- | --- | --- | --- |
+| `FindingResultPage` | `pages/FindingResult/index.jsx` | 데이터 로드, 선택 상태 관리, 자식 조립 | 낮음 |
+| `VulnerabilityTypeTabs` | `pages/FindingResult/components/` | 유형 탭 표시·전환 | 낮음 |
+| `FindingDetailPanel` | `pages/FindingResult/components/` | AI 설명 표시, 상태 변경 트리거 | 낮음 |
+| `CodeDiffPanel` | `pages/FindingResult/components/` | Before/After 렌더 | 보통 |
+| `FileTree` | `components/common/FileTree.jsx` | 경로 배열 → 트리 렌더 | 높음 |
+| `CodeViewer` | `components/common/CodeViewer.jsx` | 코드 + 마커 렌더 | 높음 |
+| `SeverityBadge` | `components/common/SeverityBadge.jsx` | 심각도 시각화 | 높음 |
+
+| Props명 | 타입 | 필수 | 기본값 | 설명 |
+| --- | --- | --- | --- | --- |
+| `files` | `AnalysisFileItem[]` | 필수 | — | 평탄한 파일 배열. 내부에서 `buildFileTree()`로 트리 변환 |
+| `activeFileId` | `number | null` | 필수 | — | 현재 선택된 파일 |
+| `onSelect` | `(fileId: number) => void` | 필수 | — | 파일 클릭 시 호출 |
+| `showFindingDot` | `boolean` | 선택 | `false` | 취약점 보유 파일에 ● 표시 (결과 화면에서 `true`) |
+| `onAddFile` | `(fileName: string) => void` | 선택 | `undefined` | 제공 시 하단에 `+ 파일 추가` 노출 (입력 화면 전용) |
+| `rootLabel` | `string` | 선택 | `'탐색기'` | 트리 상단 라벨 |
+
+| Props명 | 타입 | 필수 | 기본값 | 설명 |
+| --- | --- | --- | --- | --- |
+| `fileName` | `string` | 필수 | — | 상단 탭에 표시할 파일명 |
+| `content` | `string` | 필수 | — | 코드 본문 전체 |
+| `markers` | `FindingMarker[]` | 선택 | `[]` | 하이라이트할 취약 라인 |
+| `activeFindingId` | `number | null` | 선택 | `null` | 강조 표시할 마커 |
+| `scope` | `'finding' | 'full'` | 선택 | `'full'` | `finding`이면 해당 구간 ±3줄만 표시 |
+| `onMarkerClick` | `(findingId: number) => void` | 선택 | `undefined` | 마커 클릭 시 호출 |
+| `loading` | `boolean` | 선택 | `false` | Skeleton 표시 |
+
+| Props명 | 타입 | 필수 | 기본값 | 설명 |
+| --- | --- | --- | --- | --- |
+| `finding` | `FindingDetail | null` | 필수 | — | `null`이면 "취약점을 선택하세요" 안내 |
+| `loading` | `boolean` | 필수 | — | 상세 로딩 중 Skeleton |
+| `showDetectionSource` | `boolean` | 선택 | `true` | 룰 ID·룰 제목(탐지 출처)을 AI 설명과 구분해 표시 |
+| `codeScope` | `'finding' | 'full'` | 필수 | — | 토글 현재 값 |
+| `onScopeChange` | `(scope) => void` | 필수 | — | 토글 변경 |
+| `onStatusChange` | `(findingId, status) => void` | 필수 | — | 해결/무시 처리 |
+
+| Props명 | 타입 | 필수 | 기본값 | 설명 |
+| --- | --- | --- | --- | --- |
+| `fileName` | `string` | 필수 | — | 두 패널 헤더에 표시 |
+| `beforeCode` | `{ startLine, lines[] }` | 필수 | — | 취약 코드 |
+| `afterCode` | `{ startLine, lines[] } | null` | 필수 | — | `null`이면 "제안된 개선 코드가 없습니다" (LLM 실패 시에도 BEFORE는 정상 표시) |
+
+| Props명 | 타입 | 필수 | 기본값 | 설명 |
+| --- | --- | --- | --- | --- |
+| `visible` | `boolean` | 필수 | — | 분석 시작 후에만 노출 |
+| `progress` | `AnalysisProgress | null` | 필수 | — | 폴링 결과. `stage`로 탐지/설명 단계를 구분해 렌더 |
+| `showLogs` | `boolean` | 선택 | `true` | `recentLogs`를 하단 콘솔 영역에 표시 |
+| `onRetry` | `() => void` | 필수 | — | 실패 시 재시도 |
+| `collapsed` | `boolean` | 선택 | `false` | 접기 상태 |
+| `onToggleCollapse` | `() => void` | 선택 | — | 접기/펼치기 |
+
+| Props명 | 타입 | 필수 | 기본값 | 설명 |
+| --- | --- | --- | --- | --- |
+| `label` | `string` | 필수 | — | "이번 주 분석" |
+| `value` | `string` | 필수 | — | "128", "86.4%" (포맷은 부모가 처리) |
+| `caption` | `string` | 선택 | `''` | "지난주 대비 +18%" |
+| `tone` | `'default' | 'positive' | 'negative'` | 선택 | `'default'` | caption 색상 |
+
+| Props명 | 타입 | 필수 | 기본값 | 설명 |
+| --- | --- | --- | --- | --- |
+| `severity` | `Severity` | 필수 | — | 배지 색상·라벨 결정 |
+| `cweId` | `string | null` | 선택 | `null` | 있으면 `치명적 · CWE-89` 형태로 표시 |
+| `size` | `'sm' | 'md'` | 선택 | `'sm'` | 목록은 sm, 상세는 md |
+
+| 상태명 | 위치 선택 | 결정 근거 |
+| --- | --- | --- |
+| `token`, `user` | `authStore` (persist) | 앱 전체 인증 판단 + 새로고침 후에도 유지 필요 |
+| `analyses` | `analysisStore` | Sidebar / HomePage / AnalysisListPage 3곳이 동일 데이터 공유 |
+| `currentAnalysis`, `files`, `findings` | `analysisStore` | 결과 화면의 5개 자식 컴포넌트가 같은 데이터를 봄 |
+| `selectedFinding` | `analysisStore` | 상세 패널과 Diff 패널이 동시에 참조 |
+| `progress` | `analysisStore` | 폴링 중 페이지를 벗어나도 Sidebar에 진행 배지 표시 |
+| `summary` | `dashboardStore` | 홈 재진입 시 캐시 재사용, 로딩 깜빡임 방지 |
+| `toast` | `uiStore` | 어느 컴포넌트에서든 알림을 띄워야 함 |
+| `draftFiles`, `title` | 로컬 `useState` | 입력 중 데이터, 서버 무관, 자주 변경됨 |
+| `activeFileId`, `activeTypeTab`, `codeScope` | 로컬 `useState` | 순수 UI 선택 상태 |
+| `isDeleteModalOpen` | 로컬 `useState` | UI 열림/닫힘 |
+
+| 상태명 | 타입 | 초기값 | 용도 |
+| --- | --- | --- | --- |
+| `title` | `string` | `''` | 분석 제목(프로젝트명) |
+| `draftFiles` | `{relativePath, content}[]` | `[]` | 입력 중인 파일 목록 |
+| `activeFileId` | `number` | `0` | 편집 중인 파일 인덱스 |
+| `scope` | `'current' | 'all'` | `'all'` | 분석 범위 선택 |
+| `submitting` | `boolean` | `false` | 분석 시작 요청 중 |
+| `fieldErrors` | `object` | `{}` | 클라이언트 검증 오류 |
+
+| 상태명 | 타입 | 초기값 | 용도 |
+| --- | --- | --- | --- |
+| `activeTypeTab` | `string | null` | `null` | 선택된 유형 탭 (null = 전체) |
+| `activeFileId` | `number | null` | `null` | 코드 뷰어에 표시 중인 파일 |
+| `codeScope` | `'finding' | 'full'` | `'finding'` | 코드 표시 범위 토글 |
+
+| 상태명 | 타입 | 초기값 | 용도 |
+| --- | --- | --- | --- |
+| `statusFilter` | `string` | `'ALL'` | 상태 필터 |
+| `sort` | `string` | `'createdAt,desc'` | 정렬 |
+| `deleteTarget` | `AnalysisSummary | null` | `null` | 삭제 확인 모달 대상 |
+
+| 상태/액션 | 타입 | 용도 |
+| --- | --- | --- |
+| `token` | `string | null` | 로그인 여부 판단, axios 헤더 주입 |
+| `user` | `{id, email} | null` | 사이드바·헤더 사용자 표시 |
+| `login(email, password)` | `async function` | 로그인 폼 제출 |
+| `signup(email, password)` | `async function` | 회원가입 폼 제출 |
+| `logout()` | `function` | 토큰 삭제 + `/login` 이동 |
+| `isAuthenticated()` | `function` | `ProtectedLayout` 가드 |
+
+| 상태/액션 | 타입 | 용도 |
+| --- | --- | --- |
+| `analyses` | `AnalysisSummary[]` | 사이드바·목록·홈 공유 |
+| `listLoading` | `boolean` | 목록 로딩 |
+| `currentAnalysis` | `object | null` | 결과 화면 요약 |
+| `files` | `AnalysisFileItem[]` | 파일 트리 |
+| `fileContent` | `{fileId, content, markers} | null` | 코드 뷰어 본문 |
+| `findings` | `Finding[]` | 취약점 목록 |
+| `selectedFinding` | `FindingDetail | null` | 상세 패널 + Diff |
+| `detailLoading` | `boolean` | 상세 로딩 |
+| `progress` | `AnalysisProgress | null` | 폴링 결과 |
+| `error` | `string | null` | 화면 오류 메시지 |
+| `fetchAnalyses(params)` | `async` | 목록 조회 |
+| `createAnalysis(title, files)` | `async` | 분석 생성 → analysisId 반환 |
+| `startPolling(analysisId)` | `function` | 2초 간격 폴링 시작 |
+| `stopPolling()` | `function` | 폴링 중단 (언마운트 시 필수) |
+| `fetchResult(analysisId)` | `async` | 요약+파일+취약점 병렬 조회 |
+| `fetchFileContent(analysisId, fileId)` | `async` | 코드 본문 조회 |
+| `selectFinding(findingId)` | `async` | 상세 조회 |
+| `updateFindingStatus(findingId, status)` | `async` | 상태 변경 + 목록 동기화 |
+| `deleteAnalysis(analysisId)` | `async` | 삭제 + 목록 갱신 |
+
+| 상태/액션 | 타입 | 용도 |
+| --- | --- | --- |
+| `summary` | `object | null` | 홈 지표·차트·최근 분석 |
+| `loading` | `boolean` | 로딩 표시 |
+| `error` | `string | null` | 오류 표시 |
+| `fetchSummary(days)` | `async` | 홈 진입 시 1회 호출 |
+
+| 상태/액션 | 타입 | 용도 |
+| --- | --- | --- |
+| `toast` | `{text, type} | null` | 알림 메시지 |
+| `showSuccess(text)` | `function` | 성공 알림 |
+| `showError(text)` | `function` | 실패 알림 |
+| `clearToast()` | `function` | 알림 제거 |
+
+| API 엔드포인트 | 메서드 | 용도 | 호출 시점 | 호출 위치 | 인증 |
+| --- | --- | --- | --- | --- | --- |
+| `/api/v1/auth/login` | `POST` | 로그인 | 폼 제출 | `authStore.login` | 불필요 |
+| `/api/v1/auth/signup` | `POST` | 회원가입 | 폼 제출 | `authStore.signup` | 불필요 |
+| `/api/v1/dashboard/summary` | `GET` | 홈 통계 | 홈 진입 | `dashboardStore` | 필요 |
+| `/api/v1/analyses` | `GET` | 분석 목록 | 사이드바·목록 진입 | `analysisStore` | 필요 |
+| `/api/v1/analyses` | `POST` | 분석 생성 | `분석 시작` 클릭 | `analysisStore` | 필요 |
+| `/api/v1/analyses/{id}/status` | `GET` | 진행 상태 | **2초 폴링** | `analysisStore` | 필요 |
+| `/api/v1/analyses/{id}` | `GET` | 분석 요약 | 결과 화면 진입 | `analysisStore` | 필요 |
+| `/api/v1/analyses/{id}/files` | `GET` | 파일 트리 | 결과 화면 진입 | `analysisStore` | 필요 |
+| `/api/v1/analyses/{id}/files/{fileId}` | `GET` | 코드 본문 | 파일 선택 | `analysisStore` | 필요 |
+| `/api/v1/analyses/{id}/findings` | `GET` | 취약점 목록 | 결과 화면 진입 | `analysisStore` | 필요 |
+| `/api/v1/findings/{findingId}` | `GET` | 취약점 상세 | 취약점 선택 | `analysisStore` | 필요 |
+| `/api/v1/findings/{findingId}/status` | `PATCH` | 상태 변경 | 해결/무시 클릭 | `analysisStore` | 필요 |
+| `/api/v1/analyses/{id}` | `DELETE` | 분석 삭제 | 삭제 확인 | `analysisStore` | 필요 |
+| `/api/v1/analyses/{id}/report` | `GET` | 보고서 | 내보내기 클릭 | `ExportReportButton` | 필요 |
+
+| HTTP 상태 | 의미 | 처리 방식 |
+| --- | --- | --- |
+| `400` | 검증 오류 | `fieldErrors`를 해당 입력 필드 하단에 표시 |
+| `401` | 인증 실패/만료 | 토큰 삭제 → `/login` 이동 |
+| `403` | 권한 없음 | "해당 분석에 접근할 권한이 없습니다" 토스트 + 홈 이동 |
+| `404` | 리소스 없음 | "분석을 찾을 수 없습니다" 화면 표시 |
+| `409` | 중복/상태 충돌 | "이미 해결 처리된 취약점입니다" 등 토스트 |
+| `413` | 크기 초과 | "전체 코드 크기가 500KB를 초과했습니다" 폼 상단 표시 |
+| `422` | 규칙 위반 | "진행 중인 분석은 삭제할 수 없습니다" 토스트 |
+| `502` | LLM 오류 | "AI 분석 서비스에 연결하지 못했습니다. 다시 시도해 주세요" + 재시도 버튼 |
+| `500` | 서버 오류 | "서버 오류. 잠시 후 다시 시도해 주세요" |
+
+| 최적화 기법 | 적용 대상 | 사용 이유 |
+| --- | --- | --- |
+| `useMemo` | `visibleFindings`, `markers` (FindingResultPage) | 탭 전환마다 수십~수백 건 배열을 필터링하므로 재계산을 막는다 |
+| `useMemo` | `buildFileTree(files)` (FileTree 내부) | 경로 배열 → 트리 변환은 렌더마다 반복할 필요가 없다 |
+| `React.memo` | `CodeViewer`, `FileTree`, `CodeDiffPanel` | 상세 패널만 바뀔 때 대용량 코드 렌더를 건너뛴다 |
+| `useCallback` | `handleSelectFile`, `handleCodeChange` | memo 된 자식에게 내려주는 콜백의 참조 고정 |
+| 로컬 상태 유지 | `draftFiles` (전역화 금지) | 타이핑마다 전역 스토어가 갱신되면 사이드바까지 리렌더된다 |
+| 클라이언트 필터링 | 유형 탭 전환 | 이미 받은 `findings` 배열을 재사용해 추가 요청을 없앤다 |
+| 코드 범위 제한 | `CodeViewer scope='finding'` | 대용량 파일 전체를 DOM에 그리지 않고 해당 구간만 렌더 |
+
+| No | 논점 | 현재 설계 | 결정 필요 사항 |
+| --- | --- | --- | --- |
+| **FE-01** | 구문 하이라이트 | 미도입 (라인번호 + 마커만) | `prism-react-renderer` 도입 여부 |
+| **FE-02** | 차트 라이브러리 | SVG 직접 렌더 | `recharts` 도입 시 `package.json` 추가 필요 |
+| **FE-03** | 토큰 저장 위치 | `localStorage` (zustand persist) | XSS 노출 위험. 보안 서비스인 만큼 발표 시 언급 필요 |
+| **FE-04** | ~~진행 로그 표시~~ | **해결됨** | 룰 탐지 로그를 `recentLogs`로 표시. SSE는 선택 사항 |
+| **FE-05** | 파일 업로드 UI | 파일명 입력 + 코드 붙여넣기 | drag&drop 지원 여부 |
+| **FE-06** | 즐겨찾기/보관 | 미구현 | 사이드바 기능 구현 여부 (UI-04와 동일 논점) |
+| **FE-07** | 탐지 옵션 UI | 체크박스 3개 → `scanOptions` 전송 | 화면에 노출할지, 항상 3종 실행할지 결정 (UI-11) |
+| **FE-08** | 오탐 판정 항목 | 배지 표시, 목록에 포함 | 기본 숨김 필터 제공 여부 (D-20) |

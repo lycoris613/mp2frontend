@@ -123,6 +123,29 @@ button {
   padding:8px
 }
 
+.add-project-btn {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  width:100%;
+  padding:8px;
+  border:1px dashed #d1d5db;
+  background:transparent;
+  color:#6b7280;
+  border-radius:6px;
+  font-size:11px;
+  cursor:pointer;
+  margin-top:8px;
+  transition:all 0.15s ease;
+}
+
+.add-project-btn:hover {
+  background:#f3f4f6;
+  color:#111827;
+  border-color:#9ca3af;
+}
+
 .content {
   flex:1;
   min-width:0
@@ -280,19 +303,13 @@ button {
 
 .home-grid {
   display:grid;
-  grid-template-columns:1.7fr .85fr .85fr;
-  grid-template-rows:165px 135px;
-  gap:10px
+  grid-template-columns: 1.15fr 1.25fr;
+  gap:12px;
+  align-items: stretch;
 }
 
 .recent {
-  grid-row:1/3;
-  padding:14px
-}
-
-.severity {
-  grid-column:2/4;
-  padding:14px
+  padding:14px;
 }
 
 .risk-types,.summary {
@@ -419,309 +436,798 @@ button {
 
 .workspace {
   display:grid;
-  grid-template-columns:190px 1fr 180px;
-  height:calc(100vh - 205px);
-  background:#fff
+  grid-template-columns:170px 1fr 220px;
+  height:calc(100vh - 120px);
+  background:#fff;
+  border-top:1px solid #e5e7eb;
 }
 
-.filetree,.settings,.result-tree,.finding {
-  padding:16px;
-  border-right:1px solid #e4e5e8
+/* 파일 탐색기 */
+.filetree,.result-tree {
+  padding:14px 10px;
+  border-right:1px solid #e5e7eb;
+  overflow-y:auto;
+  background:#fafafa;
 }
 
-.filetree small,.result-tree small {
-  font-size:8px;
-  color:#777
+.tree-header {
+  margin-bottom:10px;
+  padding:0 6px;
 }
 
-.filetree>b {
-  display:block;
-  margin:13px 0 5px;
-  font-size:10px
+.tree-header small {
+  font-size:9.5px;
+  font-weight:700;
+  color:#6b7280;
+  letter-spacing:0.3px;
+}
+
+.tree-body {
+  display:flex;
+  flex-direction:column;
+  gap:1px;
+}
+
+.tree-node-group {
+  display:flex;
+  flex-direction:column;
 }
 
 .tree-row {
-  height:28px;
-  padding:7px 9px;
+  min-height:26px;
+  padding:4px 8px;
   display:flex;
-  gap:8px;
   align-items:center;
-  font-size:10px;
-  color:#666;
-  border-radius:4px
+  font-size:10.5px;
+  color:#4b5563;
+  border-radius:4px;
+  cursor:pointer;
+  transition:background 0.12s ease;
+}
+
+.tree-row:hover {
+  background:#f3f4f6;
+  color:#111;
 }
 
 .tree-row.selected {
-  background:#e9eaec;
-  color:#222
+  background:#e5e7eb;
+  color:#111827;
+  font-weight:600;
 }
 
+.tree-row.is-dir {
+  cursor:default;
+  font-weight:600;
+  color:#374151;
+}
+
+.tree-row.is-dir:hover {
+  background:transparent;
+}
+
+.folder-name {
+  color:#374151;
+}
+
+.ext-badge {
+  background:#e5e7eb;
+  color:#4b5563;
+  font-size:8.5px;
+  font-weight:700;
+  padding:1px 4px;
+  border-radius:3px;
+  margin-right:6px;
+  letter-spacing:0.2px;
+}
+
+.file-name {
+  flex:1;
+}
+
+.finding-dot {
+  color:#ef4444;
+  font-size:10px;
+  margin-left:auto;
+}
+
+/* 코드 에디터 및 뷰어 */
 .editor {
-  border-right:1px solid #e4e5e8;
-  overflow:hidden
+  border-right:1px solid #e5e7eb;
+  display:flex;
+  flex-direction:column;
+  background:#fff;
+  overflow:hidden;
+  position:relative;
 }
 
 .tab {
   height:34px;
-  border-bottom:1px solid #e5e6e8;
-  padding:11px 16px;
-  font-size:10px
+  border-bottom:1px solid #e5e7eb;
+  padding:8px 16px;
+  font-size:10.5px;
+  font-weight:600;
+  color:#374151;
+  background:#fafafa;
+  display:flex;
+  align-items:center;
+}
+
+.code-container {
+  position:relative;
+  flex:1;
+  overflow-y:auto;
+  padding:12px 0;
 }
 
 .code {
-  padding:14px 0;
-  font-family:Consolas,monospace;
-  font-size:10px
+  font-family:Consolas, Monaco, monospace;
+  font-size:10px;
+  line-height:1.7;
 }
 
-.code>div {
-  min-height:24px;
+.code-line {
+  min-height:22px;
   display:grid;
-  grid-template-columns:38px 1fr auto;
+  grid-template-columns:36px 1fr;
   align-items:center;
-  padding-right:12px
+  padding:0 12px;
 }
 
-.code em {
+.code-line em {
   font-style:normal;
-  color:#b2b4b7;
+  color:#9ca3af;
   text-align:right;
-  padding-right:12px
+  padding-right:12px;
+  user-select:none;
 }
 
-.code code {
-  white-space:pre
+.code-line code {
+  white-space:pre;
+  color:#1f2937;
 }
 
-.vuln-line {
-  background:#fff0f0
+/* 취약 라인 테두리 박스 하이라이트 (라인 6) */
+.code-line.vuln-line-highlight {
+  border:1px solid #ef4444;
+  background:#fef2f2;
+  border-radius:4px;
+  margin:1px 10px;
+  padding:1px 2px;
 }
 
-.tag {
-  font-family:Arial,sans-serif;
-  font-size:8px;
-  color:#b84d4d;
-  background:#f7dede;
-  padding:3px 5px;
-  border-radius:3px
+.code-line.vuln-line-highlight code {
+  color:#b91c1c;
+  font-weight:600;
 }
 
+.code-tag-row {
+  padding:6px 12px 6px 48px;
+}
+
+.vuln-tag-chip {
+  background:#fee2e2;
+  color:#dc2626;
+  font-size:9.5px;
+  font-weight:600;
+  padding:2px 8px;
+  border-radius:4px;
+  display:inline-block;
+}
+
+/* 중앙 플로팅 분석 실행 중 다크 패널 (코드입력.png) */
+.analysis-overlay-card {
+  position:absolute;
+  top:38%;
+  left:50%;
+  transform:translate(-50%, -50%);
+  width:320px;
+  background:#1e222b;
+  color:#fff;
+  border-radius:8px;
+  box-shadow:0 12px 30px rgba(0,0,0,0.35);
+  padding:14px 16px;
+  z-index:10;
+}
+
+.overlay-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:12px;
+}
+
+.overlay-title {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:11.5px;
+  font-weight:700;
+  color:#f3f4f6;
+}
+
+.pulsing-dot {
+  color:#60a5fa;
+  font-size:10px;
+}
+
+.collapse-btn {
+  background:transparent;
+  border:none;
+  color:#9ca3af;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  padding:2px;
+}
+
+.progress-row {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:12px;
+}
+
+.custom-progress-track {
+  flex:1;
+  height:4px;
+  background:#374151;
+  border-radius:9999px;
+  overflow:hidden;
+}
+
+.custom-progress-bar {
+  height:100%;
+  background:#ffffff;
+  border-radius:9999px;
+  transition:width 0.3s ease;
+}
+
+.percent-text {
+  font-size:11px;
+  font-weight:700;
+  color:#ffffff;
+  min-width:30px;
+  text-align:right;
+}
+
+.console-logs {
+  font-family:Consolas, Monaco, monospace;
+  font-size:9.5px;
+  line-height:1.7;
+  color:#9ca3af;
+  border-top:1px solid #2d333f;
+  padding-top:8px;
+}
+
+.log-target {
+  color:#e5e7eb;
+  margin:0 0 4px;
+}
+
+.log-target span {
+  color:#93c5fd;
+}
+
+.log-line {
+  margin:0;
+  color:#9ca3af;
+}
+
+/* 우측 분석 설정 패널 (코드입력.png) */
 .settings {
-  border-right:0
+  padding:16px;
+  background:#fff;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  overflow-y:auto;
+  border-right:none;
 }
 
 .settings h3 {
   font-size:12px;
-  margin:0 0 18px
+  font-weight:700;
+  margin:0 0 2px;
+  color:#111827;
 }
 
-.settings label {
-  display:block;
-  color:#777;
-  font-size:9px;
-  margin:12px 0 5px
-}
-
-.select,.estimate {
-  border:1px solid #e1e3e5;
-  background:#fafafa;
-  border-radius:5px;
-  padding:9px;
-  font-size:9px
-}
-
-.estimate {
-  margin-top:15px;
+.form-group {
   display:flex;
   flex-direction:column;
-  gap:4px
+  gap:4px;
 }
 
-.estimate b {
-  font-size:16px
+.form-group label {
+  font-size:9.5px;
+  font-weight:600;
+  color:#4b5563;
 }
 
-.estimate small {
-  color:#999
+.req {
+  color:#ef4444;
+  margin-left:2px;
 }
 
-.wide {
+.text-input {
   width:100%;
-  justify-content:center;
-  margin-top:10px
-}
-
-.analysis-log {
-  margin:10px 14px 14px;
-  background:#282b31;
-  color:#dfe1e4;
-  border-radius:7px;
-  padding:12px 18px;
-  height:116px
-}
-
-.analysis-log>div {
-  display:flex;
-  justify-content:space-between;
-  font-size:9px
-}
-
-.analysis-log progress {
-  accent-color:#cfd2d7
-}
-
-.analysis-log code {
-  font-size:8px;
-  color:#aeb2b9;
-  line-height:1.7
-}
-
-.result-page {
-  padding-top:12px
-}
-
-.result-title {
-  display:flex;
-  justify-content:space-between;
-  align-items:center
-}
-
-.result-title h2 {
-  font-size:16px;
-  margin:0
-}
-
-.result-title p {
-  font-size:9px;
-  color:#999;
-  margin:3px 0 0
-}
-
-.outline-btn {
-  border:1px solid #d8dadd;
-  background:#fff;
+  padding:6px 9px;
+  font-size:10.5px;
+  border:1px solid #d1d5db;
   border-radius:5px;
-  padding:8px 12px;
-  font-size:9px
+  background:#f9fafb;
+  color:#111;
+  outline:none;
 }
 
-.filter-row {
+.text-input:focus {
+  border-color:#111827;
+}
+
+.select-badge-box {
   display:flex;
-  gap:7px;
   align-items:center;
-  margin:12px 0
+  gap:6px;
+  padding:6px 9px;
+  font-size:10.5px;
+  border:1px solid #e5e7eb;
+  border-radius:5px;
+  background:#f9fafb;
+  color:#374151;
 }
 
-.pill {
-  border:1px solid #ddd;
-  border-radius:15px;
-  padding:5px 9px;
-  font-size:8px
+.lang-tag {
+  background:#e5e7eb;
+  font-size:8.5px;
+  font-weight:700;
+  padding:1px 4px;
+  border-radius:3px;
+  color:#374151;
 }
 
-.pill.active {
-  border-color:#777
+.select-input {
+  width:100%;
+  padding:6px 9px;
+  font-size:10.5px;
+  border:1px solid #d1d5db;
+  border-radius:5px;
+  background:#f9fafb;
+  color:#111;
+  cursor:pointer;
+  outline:none;
 }
 
-.totals {
+.checkbox-group {
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin-top:2px;
+}
+
+.checkbox-label {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:10.5px;
+  color:#374151;
+  cursor:pointer;
+}
+
+.help-text {
+  font-size:8.5px;
+  color:#9ca3af;
+  margin-top:2px;
+}
+
+.estimate-card {
+  background:#f3f4f6;
+  border-radius:6px;
+  padding:12px;
+  margin-top:2px;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+
+.estimate-label {
+  font-size:9.5px;
+  color:#6b7280;
+}
+
+.estimate-value {
+  font-size:18px;
+  font-weight:800;
+  color:#111827;
+  margin:2px 0;
+}
+
+.estimate-meta {
+  font-size:9px;
+  color:#9ca3af;
+}
+
+/* 결과 화면 (결과화면.png) */
+.result-page {
+  padding-top:10px;
+}
+
+.report-btn {
+  font-size:10px;
+  font-weight:600;
+  color:#374151;
+  border:1px solid #d1d5db;
+  padding:6px 12px;
+  border-radius:5px;
+}
+
+/* 필터 & 요약 바 */
+.filter-summary-row {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin:10px 0 12px;
+  gap:12px;
+}
+
+.filter-pill-group {
+  display:flex;
+  gap:8px;
+}
+
+.pill-tab {
+  display:flex;
+  align-items:center;
+  gap:5px;
+  padding:4px 11px;
+  border-radius:9999px;
+  border:1px solid #e5e7eb;
+  background:#fff;
+  font-size:10.5px;
+  color:#4b5563;
+  cursor:pointer;
+  transition:all 0.15s ease;
+}
+
+.pill-tab:hover {
+  background:#f9fafb;
+}
+
+.pill-tab.active {
+  border-color:#111827;
+  color:#111827;
+  font-weight:700;
+}
+
+.pill-dot {
+  font-size:9px;
+  color:#6b7280;
+}
+
+.pill-tab.active .pill-dot {
+  color:#111827;
+}
+
+.pill-divider {
+  color:#d1d5db;
+}
+
+.severity-summary-bar {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  font-size:10.5px;
+  color:#4b5563;
   margin-left:auto;
-  font-size:8px;
-  color:#777
 }
 
-.result-grid {
+.summary-total b {
+  font-weight:700;
+  color:#111827;
+}
+
+.summary-item {
+  display:flex;
+  align-items:center;
+  gap:4px;
+}
+
+.summary-item .dot.red { color:#ef4444; }
+.summary-item .dot.orange { color:#f97316; }
+.summary-item .dot.gray { color:#9ca3af; }
+
+/* 결과 메인 3-Column 그리드 */
+.result-grid-3col {
   display:grid;
-  grid-template-columns:155px 1fr 205px;
-  height:300px;
-  border:1px solid #e1e3e5;
-  border-radius:7px;
+  grid-template-columns:160px 1.55fr 1.15fr;
+  height:355px;
+  border:1px solid #e5e7eb;
+  border-radius:8px;
   overflow:hidden;
-  background:#fff
+  background:#fff;
+  box-shadow:0 1px 3px rgba(0,0,0,0.04);
 }
 
-.result-tree {
-  border-right:1px solid #e4e5e8
-}
-
-.result-tree .tree-row {
-  justify-content:space-between
-}
-
-.result-tree .tree-row span {
-  color:#d55
-}
-
-.result-editor {
-  border-right:1px solid #e4e5e8
-}
-
+/* 취약점 상세 정보 패널 (결과화면.png 우측) */
 .finding {
-  border:0;
-  padding:14px
+  padding:14px;
+  background:#fff;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  overflow-y:auto;
+  border:none;
 }
 
-.finding-top {
+.finding-header-badge-row {
+  display:flex;
+  align-items:center;
+}
+
+.severity-dark-badge {
+  background:#111827;
+  color:#fff;
+  font-size:9.5px;
+  font-weight:700;
+  padding:2px 7px;
+  border-radius:4px;
+  letter-spacing:0.2px;
+}
+
+.finding-main-title {
+  font-size:15px;
+  font-weight:800;
+  color:#111827;
+  margin:2px 0 4px;
+}
+
+/* 탐지 근거 · 룰 기반 박스 */
+.rule-detection-box {
+  background:#f9fafb;
+  border:1px solid #e5e7eb;
+  border-radius:6px;
+  padding:9px 10px;
+}
+
+.rule-box-header {
+  font-size:9.5px;
+  font-weight:700;
+  color:#4b5563;
+  margin-bottom:6px;
+}
+
+.rule-box-content {
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+
+.rule-row {
+  display:grid;
+  grid-template-columns:52px 1fr;
+  font-size:10px;
+  gap:6px;
+  align-items:baseline;
+}
+
+.rule-label {
+  color:#6b7280;
+  font-weight:500;
+}
+
+.rule-value {
+  color:#111827;
+  font-weight:600;
+}
+
+.rule-code-snippet {
+  font-family:Consolas, Monaco, monospace;
+  font-size:9.5px;
+  color:#111827;
+  word-break:break-all;
+}
+
+/* AI 분석 섹션 */
+.ai-analysis-section {
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  margin-top:2px;
+}
+
+.ai-section-header {
   display:flex;
   justify-content:space-between;
-  font-size:8px
+  align-items:center;
+  font-size:10px;
 }
 
-.finding-top span {
-  background:#f0e4e4;
-  padding:4px 6px;
-  border-radius:3px
+.ai-title {
+  font-weight:700;
+  color:#374151;
 }
 
-.finding h3 {
-  font-size:14px;
-  margin:10px 0 14px
-}
-
-.finding label {
+.ai-confidence {
+  color:#6b7280;
   font-size:9px;
-  color:#777
 }
 
-.finding p {
+.ai-field label {
+  display:block;
   font-size:9px;
-  line-height:1.6
+  font-weight:600;
+  color:#6b7280;
+  margin-bottom:1px;
 }
 
-.diff {
+.ai-field p {
+  font-size:9.5px;
+  line-height:1.5;
+  color:#374151;
+  margin:0;
+}
+
+/* 해결 / 무시 버튼 */
+.finding-action-buttons {
+  display:flex;
+  gap:8px;
+  margin-top:6px;
+}
+
+.action-btn {
+  flex:1;
+  padding:7px 0;
+  font-size:11px;
+  font-weight:600;
+  border-radius:5px;
+  cursor:pointer;
+  text-align:center;
+  transition:all 0.15s ease;
+}
+
+.resolve-btn {
+  background:#111827;
+  color:#fff;
+  border:1px solid #111827;
+}
+
+.resolve-btn:hover {
+  background:#1f2937;
+}
+
+.resolve-btn.completed {
+  background:#059669;
+  border-color:#059669;
+}
+
+.ignore-btn {
+  background:#fff;
+  color:#374151;
+  border:1px solid #d1d5db;
+}
+
+.ignore-btn:hover {
+  background:#f9fafb;
+}
+
+.ignore-btn.completed {
+  background:#f3f4f6;
+  color:#9ca3af;
+}
+
+/* 이 취약점만 / 전체 코드 토글 */
+.scope-toggle-group {
+  display:flex;
+  background:#f3f4f6;
+  border-radius:6px;
+  padding:2px;
+  margin-top:4px;
+}
+
+.toggle-option {
+  flex:1;
+  padding:5px 0;
+  font-size:10px;
+  font-weight:600;
+  text-align:center;
+  border:none;
+  background:transparent;
+  color:#6b7280;
+  border-radius:4px;
+  cursor:pointer;
+  transition:all 0.15s ease;
+}
+
+.toggle-option.active {
+  background:#fff;
+  color:#111827;
+  box-shadow:0 1px 2px rgba(0,0,0,0.06);
+}
+
+/* 하단 BEFORE / AFTER Diff 그리드 (결과화면.png) */
+.diff-card-grid {
   display:grid;
   grid-template-columns:1fr 1fr;
-  gap:10px;
-  margin-top:10px
+  gap:12px;
+  margin-top:12px;
 }
 
-.diff section {
+.diff-panel {
   background:#fff;
-  border:1px solid #e1e3e5;
-  border-radius:7px;
-  padding:12px
+  border:1px solid #e5e7eb;
+  border-radius:8px;
+  padding:12px;
+  box-shadow:0 1px 3px rgba(0,0,0,0.03);
 }
 
-.diff b {
-  display:block;
+.diff-panel-header {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:8px;
+}
+
+.diff-tag {
   font-size:9px;
-  margin-bottom:8px
+  font-weight:800;
+  padding:2px 6px;
+  border-radius:3px;
+  letter-spacing:0.5px;
 }
 
-.diff code {
-  display:block;
-  font-size:9px;
-  padding:5px 7px;
-  margin:2px 0
+.before-tag {
+  background:#fee2e2;
+  color:#dc2626;
 }
 
-.bad {
-  background:#f6e4e4;
-  color:#9a4f4f
+.after-tag {
+  background:#dcfce7;
+  color:#16a34a;
 }
 
-.good {
-  background:#e4f1e6;
-  color:#41704a
+.diff-filename {
+  font-size:10px;
+  font-weight:600;
+  color:#374151;
+}
+
+.diff-lines {
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+
+.diff-row {
+  display:grid;
+  grid-template-columns:26px 1fr;
+  align-items:center;
+  padding:4px 8px;
+  border-radius:4px;
+  font-family:Consolas, Monaco, monospace;
+  font-size:10px;
+}
+
+.diff-row.bad-line {
+  background:#fef2f2;
+}
+
+.diff-row.bad-line .line-num {
+  color:#ef4444;
+}
+
+.diff-row.bad-line .line-code {
+  color:#b91c1c;
+}
+
+.diff-row.good-line {
+  background:#f0fdf4;
+}
+
+.diff-row.good-line .line-num {
+  color:#22c55e;
+}
+
+.diff-row.good-line .line-code {
+  color:#15803d;
 }
 
 @media(max-width:900px) {
@@ -767,57 +1273,159 @@ button {
   }
 
 }
-cd /mnt/data/codeguard-update && zip -qr /mnt/data/codeguard-ai-frontend-piechart.zip codeguard-ai-frontend
 
-
-/* Home - 취약점 유형 파이차트 */
+/* Home - 취약점 유형 및 심각도 파이차트 */
 .vulnerability-pie-panel {
-  grid-column: 2 / 4;
   padding: 14px;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.vulnerability-pie-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 10px;
+  flex: 1;
 }
 
 .vulnerability-pie-wrap {
-  height: 100px;
+  width: 160px;
+  height: 140px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .vulnerability-pie {
-  width: 220px;
-  height: 120px;
+  width: 100%;
+  height: 100%;
   overflow: visible;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.05));
 }
 
 .pie-slice {
   stroke: #ffffff;
-  stroke-width: 2;
+  stroke-width: 2.5;
   transition: opacity 0.2s ease, transform 0.2s ease;
   transform-origin: 100px 70px;
+  cursor: pointer;
 }
 
 .pie-slice:hover {
-  opacity: 0.82;
-  transform: scale(1.02);
+  opacity: 0.85;
+  transform: scale(1.04);
 }
 
-.pie-sql { fill: #5f646d; }
-.pie-secret { fill: #9ca1a9; }
-.pie-xss { fill: #c9cdd2; }
+.pie-sql { fill: #ef4444; }       /* 치명적 (Critical) */
+.pie-secret { fill: #f97316; }    /* 높음 (High) */
+.pie-xss { fill: #eab308; }       /* 중간 (Medium) */
 
-.pie-label {
-  fill: #ffffff;
-  font-size: 8px;
+/* 우측 심각도 범례 (Legend) */
+.pie-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 160px;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  background: #fbfbfc;
+  border: 1px solid #ededf0;
+  border-radius: 6px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.legend-row:hover {
+  background: #f4f4f7;
+  border-color: #e0e0e5;
+}
+
+.legend-color-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-details {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+}
+
+.legend-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.legend-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.risk-badge {
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.risk-badge.danger {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.risk-badge.warn {
+  background: #ffedd5;
+  color: #ea580c;
+}
+
+.risk-badge.moderate {
+  background: #fef9c3;
+  color: #ca8a04;
+}
+
+.legend-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: #555;
+}
+
+.legend-count {
   font-weight: 700;
-  pointer-events: none;
+  color: #111;
 }
 
-.pie-count {
-  font-size: 7px;
-  font-weight: 500;
+.legend-percent {
+  color: #888;
+}
+
+.legend-cwe {
+  margin-left: auto;
+  font-size: 9px;
+  color: #999;
 }
 
 @media(max-width:900px) {
-  .vulnerability-pie-panel { grid-column: auto; }
+  .vulnerability-pie-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .vulnerability-pie-wrap {
+    margin: 0 auto;
+  }
 }
