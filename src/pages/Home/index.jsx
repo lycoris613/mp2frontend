@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/layout/PageHeader';
 import HeroBanner from './components/HeroBanner';
 import MetricCard from './components/MetricCard';
@@ -11,8 +12,11 @@ import { PAGES } from '../../constants/navigation';
  * 04 UI화면 설계서 3절 및 05 React 컴포넌트 설계서 표 3-1 준수
  */
 export default function HomePage({ setPage, currentUser, onLogin, onLogout }) {
+  const navigate = useNavigate();
+
   const handleStartAnalyze = () => {
-    setPage(PAGES.ANALYZE);
+    if (setPage) setPage(PAGES.ANALYZE);
+    navigate('/analysis/new');
   };
 
   return (

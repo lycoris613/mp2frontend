@@ -1,3 +1,4 @@
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Home,
   ScanSearch,
@@ -14,11 +15,6 @@ import { PAGES } from '../../constants/navigation';
 /**
  * 좌측 고정 사이드바 컴포넌트
  * 로그인/로그아웃 상태 및 사용자 정보 연동
- *
- * @param {string} page - 현재 활성화된 페이지 ID
- * @param {function} setPage - 페이지 전환 함수
- * @param {object|null} currentUser - 로그인된 사용자 객체
- * @param {function} onLogout - 로그아웃 핸들러
  */
 export default function Sidebar({
   page,
@@ -26,10 +22,19 @@ export default function Sidebar({
   currentUser = null,
   onLogout,
 }) {
-  const navItem = (id, Icon, label) => (
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // 기존 setPage와 react-router-dom의 navigate를 모두 지원하는 공통 클릭 핸들러
+  const handleNavigate = (pageId, path) => {
+    if (setPage) setPage(pageId);
+    if (path) navigate(path);
+  };
+
+  const navItem = (id, path, Icon, label) => (
     <button
-      className={`nav-item ${page === id ? 'active' : ''}`}
-      onClick={() => setPage(id)}
+      className={`nav-item ${page === id || location.pathname === path ? 'active' : ''}`}
+      onClick={() => handleNavigate(id, path)}
     >
       <Icon size={15} />
       <span>{label}</span>
@@ -38,15 +43,19 @@ export default function Sidebar({
 
   return (
     <aside className="sidebar">
-      <div className="brand" onClick={() => setPage(PAGES.HOME)} style={{ cursor: 'pointer' }}>
+      <div
+        className="brand"
+        onClick={() => handleNavigate(PAGES.HOME, '/')}
+        style={{ cursor: 'pointer' }}
+      >
         <span className="brand-mark"></span>
         <b>CodeGuard AI</b>
       </div>
 
       <nav>
-        {navItem(PAGES.HOME, Home, '홈')}
-        {navItem(PAGES.ANALYZE, ScanSearch, '코드 분석')}
-        {navItem(PAGES.RESULT, FileSearch2, '분석 결과')}
+        {navItem(PAGES.HOME, '/', Home, '홈')}
+        {navItem(PAGES.ANALYZE, '/analysis/new', ScanSearch, '코드 분석')}
+        {navItem(PAGES.RESULT, '/analyses', FileSearch2, '분석 결과')}
       </nav>
 
       <div className="side-search">
@@ -65,7 +74,10 @@ export default function Sidebar({
         <ChevronRight size={12} />
       </div>
 
-      <button className="project active" onClick={() => setPage(PAGES.ANALYZE)}>
+      <button
+        className="project active"
+        onClick={() => handleNavigate(PAGES.ANALYZE, '/analysis/new')}
+      >
         <Folder size={13} />
         <span>payments-api</span>
       </button>
@@ -83,7 +95,10 @@ export default function Sidebar({
         <span>3</span>
       </div>
 
-      <button className="add-project-btn" onClick={() => setPage(PAGES.ANALYZE)}>
+      <button
+        className="add-project-btn"
+        onClick={() => handleNavigate(PAGES.ANALYZE, '/analysis/new')}
+      >
         <span>+ 프로젝트 추가</span>
       </button>
 
@@ -109,7 +124,7 @@ export default function Sidebar({
         ) : (
           <button
             className="sidebar-login-btn"
-            onClick={() => setPage(PAGES.LOGIN)}
+            onClick={() => handleNavigate(PAGES.LOGIN, '/login')}
           >
             <LogIn size={13} />
             <span>로그인하기</span>
