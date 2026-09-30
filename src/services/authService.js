@@ -17,10 +17,10 @@ const INITIAL_DEMO_USERS = [
   },
   {
     id: 2,
-    name: '재훈',
-    email: 'jaehoon@codeguard.ai',
+    name: '서연',
+    email: 'seoyeon@codeguard.ai',
     password: 'password123',
-    role: 'Security Engineer',
+    role: 'Backend Engineer',
   },
 ];
 
@@ -32,7 +32,14 @@ export function getRegisteredUsers() {
       localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(INITIAL_DEMO_USERS));
       return INITIAL_DEMO_USERS;
     }
-    return JSON.parse(data);
+    const users = JSON.parse(data);
+    // 기존 캐시된 데이터가 있을 경우 서연 (Backend)으로 마이그레이션
+    const migrated = users.map((u) =>
+      u.name === '재훈' || u.email === 'jaehoon@codeguard.ai'
+        ? { ...u, name: '서연', email: 'seoyeon@codeguard.ai', role: 'Backend Engineer' }
+        : u
+    );
+    return migrated;
   } catch {
     return INITIAL_DEMO_USERS;
   }
