@@ -440,6 +440,12 @@ button {
   height:calc(100vh - 120px);
   background:#fff;
   border-top:1px solid #e5e7eb;
+  transition:grid-template-columns 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.workspace.tree-collapsed,
+.workspace:has(.filetree.is-collapsed) {
+  grid-template-columns:38px 1fr 220px;
 }
 
 /* 파일 탐색기 */
@@ -448,7 +454,24 @@ button {
   border-right:1px solid #e5e7eb;
   overflow-y:auto;
   background:#fafafa;
-  transition:background 0.15s ease, outline 0.15s ease;
+  transition:background 0.15s ease, outline 0.15s ease, padding 0.15s ease;
+}
+
+.filetree.is-collapsed,
+.result-tree.is-collapsed {
+  padding:10px 4px;
+  overflow:hidden;
+  cursor:pointer;
+  user-select:none;
+  background:#fafafa;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+
+.filetree.is-collapsed:hover,
+.result-tree.is-collapsed:hover {
+  background:#f3f4f6;
 }
 
 .filetree.drag-over {
@@ -459,10 +482,18 @@ button {
 
 .tree-header {
   margin-bottom:10px;
-  padding:0 4px 0 6px;
+  padding:0 2px;
   display:flex;
   align-items:center;
   justify-content:space-between;
+  gap:4px;
+}
+
+.tree-header-left {
+  display:flex;
+  align-items:center;
+  gap:5px;
+  min-width:0;
 }
 
 .tree-header small {
@@ -470,14 +501,17 @@ button {
   font-weight:700;
   color:#6b7280;
   letter-spacing:0.3px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 
 .tree-add-btn {
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  width:22px;
-  height:22px;
+  width:20px;
+  height:20px;
   padding:0;
   background:transparent;
   border:1px solid #d1d5db;
@@ -485,9 +519,32 @@ button {
   color:#4b5563;
   cursor:pointer;
   transition:all 0.15s ease;
+  flex-shrink:0;
 }
 
 .tree-add-btn:hover {
+  background:#e5e7eb;
+  color:#111827;
+  border-color:#9ca3af;
+}
+
+.tree-collapse-btn {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:20px;
+  height:20px;
+  padding:0;
+  background:transparent;
+  border:1px solid #d1d5db;
+  border-radius:4px;
+  color:#4b5563;
+  cursor:pointer;
+  transition:all 0.15s ease;
+  flex-shrink:0;
+}
+
+.tree-collapse-btn:hover {
   background:#e5e7eb;
   color:#111827;
   border-color:#9ca3af;
@@ -537,17 +594,84 @@ button {
 }
 
 .tree-row.is-dir {
-  cursor:default;
+  cursor:pointer;
   font-weight:600;
   color:#374151;
+  user-select:none;
 }
 
 .tree-row.is-dir:hover {
-  background:transparent;
+  background:#f3f4f6;
+  color:#111827;
+}
+
+.folder-toggle-icon {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:14px;
+  height:14px;
+  margin-right:3px;
+  color:#6b7280;
+  flex-shrink:0;
 }
 
 .folder-name {
   color:#374151;
+}
+
+.tree-node-add-btn {
+  margin-left:auto;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:18px;
+  height:18px;
+  padding:0;
+  background:transparent;
+  border:1px solid #d1d5db;
+  border-radius:3px;
+  color:#4b5563;
+  cursor:pointer;
+  transition:all 0.15s ease;
+  flex-shrink:0;
+}
+
+.tree-node-add-btn:hover {
+  background:#e5e7eb;
+  color:#111827;
+  border-color:#9ca3af;
+}
+
+.tree-collapsed-strip {
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-start;
+  width:100%;
+  padding-top:4px;
+}
+
+.tree-collapsed-strip .tree-collapse-btn {
+  width:24px;
+  height:24px;
+  border-radius:4px;
+}
+
+.tree-collapsed-label {
+  writing-mode:vertical-rl;
+  text-orientation:mixed;
+  font-size:10px;
+  font-weight:700;
+  color:#6b7280;
+  letter-spacing:2px;
+  user-select:none;
+  padding:4px 0;
+}
+
+.filetree.is-collapsed:hover .tree-collapsed-label,
+.result-tree.is-collapsed:hover .tree-collapsed-label {
+  color:#111827;
 }
 
 .ext-badge {
@@ -1108,6 +1232,101 @@ button {
   overflow:hidden;
   background:#fff;
   box-shadow:0 1px 3px rgba(0,0,0,0.04);
+  transition:grid-template-columns 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.result-grid-3col.tree-collapsed,
+.result-grid-3col:has(.result-tree.is-collapsed),
+.result-grid-3col:has(.filetree.is-collapsed) {
+  grid-template-columns:38px 1.55fr 1.15fr;
+}
+
+.result-grid-3col.no-finding {
+  grid-template-columns:160px 1fr;
+}
+
+.result-grid-3col.no-finding.tree-collapsed,
+.result-grid-3col.no-finding:has(.result-tree.is-collapsed),
+.result-grid-3col.no-finding:has(.filetree.is-collapsed) {
+  grid-template-columns:38px 1fr;
+}
+
+/* 코드 분석 권장 알림 모달 카드 */
+.no-analysis-modal-card {
+  width:100%;
+  max-width:420px;
+  background:#ffffff;
+  border-radius:12px;
+  box-shadow:0 20px 40px rgba(0,0,0,0.25);
+  overflow:hidden;
+  border:1px solid #e5e7eb;
+  display:flex;
+  flex-direction:column;
+  animation:slideUpModal 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.no-analysis-header {
+  padding:18px 20px 12px;
+  display:flex;
+  align-items:center;
+}
+
+.no-analysis-title-group {
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.no-analysis-title-group h4 {
+  margin:0;
+  font-size:15px;
+  font-weight:700;
+  color:#111827;
+}
+
+.warning-icon {
+  color:#f59e0b;
+  flex-shrink:0;
+}
+
+.no-analysis-body {
+  padding:0 20px 18px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.no-analysis-desc {
+  margin:0;
+  font-size:13px;
+  color:#374151;
+  line-height:1.5;
+}
+
+.highlight-file {
+  font-family:monospace;
+  background:#f3f4f6;
+  padding:2px 6px;
+  border-radius:4px;
+  font-weight:700;
+  color:#1f2937;
+  border:1px solid #e5e7eb;
+}
+
+.no-analysis-sub {
+  margin:0;
+  font-size:12px;
+  color:#6b7280;
+  line-height:1.5;
+}
+
+.no-analysis-footer {
+  padding:14px 20px;
+  background:#f9fafb;
+  border-top:1px solid #f3f4f6;
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
 }
 
 /* 취약점 상세 정보 패널 (결과화면.png 우측) */

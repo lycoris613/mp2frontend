@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { currentFinding } from '../../../data/findingData';
 
 /**
@@ -17,16 +17,23 @@ export default function FindingDetailPanel({
   onScopeChange,
 }) {
   const [scope, setScope] = useState('finding'); // 'finding' | 'full'
-  const [status, setStatus] = useState('UNRESOLVED'); // 'UNRESOLVED' | 'RESOLVED' | 'IGNORED'
+  const [status, setStatus] = useState('OPEN'); // 'OPEN' | 'RESOLVED' | 'IGNORED'
+  const findingId = finding?.id || finding?.findingId;
+
+  useEffect(() => {
+    if (finding) {
+      setStatus(finding.status || 'OPEN');
+    }
+  }, [finding]);
 
   const handleResolve = () => {
     setStatus('RESOLVED');
-    onResolve?.(finding.id);
+    onResolve?.(findingId, scope);
   };
 
   const handleIgnore = () => {
     setStatus('IGNORED');
-    onIgnore?.(finding.id);
+    onIgnore?.(findingId);
   };
 
   const handleScopeSelect = (newScope) => {

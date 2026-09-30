@@ -58,6 +58,7 @@ export default function CodeAnalysisPage({ setPage, currentUser, onLogin, onLogo
   const [selectedFile, setSelectedFile] = useState('users.ts');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisConfig, setAnalysisConfig] = useState(null);
+  const [isTreeCollapsed, setIsTreeCollapsed] = useState(false);
 
   const handleStartAnalysis = (config) => {
     setAnalysisConfig(config);
@@ -138,8 +139,8 @@ export default function CodeAnalysisPage({ setPage, currentUser, onLogin, onLogo
         onLogout={onLogout}
       />
 
-      <div className="workspace">
-        {/* 좌측: 파일 계층 탐색기 (+ 로컬 파일 추가 기능) */}
+      <div className={`workspace ${isTreeCollapsed ? 'tree-collapsed' : ''}`}>
+        {/* 좌측: 파일 계층 탐색기 (+ 로컬 파일 추가 기능 및 전체 접기/펼치기) */}
         <FileTree
           items={treeData}
           activeFile={selectedFile}
@@ -147,6 +148,8 @@ export default function CodeAnalysisPage({ setPage, currentUser, onLogin, onLogo
           showAddButton={true}
           onAddFile={handleFileAdd}
           rootLabel="탐색기 · PAYMENTS-API"
+          isCollapsed={isTreeCollapsed}
+          onToggleCollapse={setIsTreeCollapsed}
         />
 
         {/* 중앙: 코드 뷰어 */}

@@ -25,9 +25,10 @@ export default function AuthPage({ onLoginSuccess, setPage }) {
   // 로그인 버튼 클릭 시
   const handleLoginSubmit = (e) => {
     e.preventDefault();
+    const isSeoyeon = loginEmail.includes('seoyeon') || loginEmail.includes('jaehoon');
     const user = {
-      name: loginEmail ? loginEmail.split('@')[0] : '지웅',
-      role: 'Frontend / LLM',
+      name: isSeoyeon ? '서연' : (loginEmail ? loginEmail.split('@')[0] : '지웅'),
+      role: isSeoyeon ? 'Backend' : 'Frontend / LLM',
     };
     onLoginSuccess?.(user);
     setPage(PAGES.HOME);
@@ -130,9 +131,9 @@ export default function AuthPage({ onLoginSuccess, setPage }) {
                 <button
                   type="button"
                   className="demo-chip"
-                  onClick={() => fillDemoAccount('jaehoon@codeguard.ai', 'password123')}
+                  onClick={() => fillDemoAccount('seoyeon@codeguard.ai', 'password123')}
                 >
-                  재훈 (Security)
+                  서연 (Backend)
                 </button>
               </div>
             </div>

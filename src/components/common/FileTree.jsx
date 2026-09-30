@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, ChevronRight, ChevronDown } from 'lucide-react';
 
 /**
  * 파일 탐색기 트리 공통 컴포넌트
@@ -23,9 +23,44 @@ export default function FileTree({
   onAddFile,
   rootLabel = '탐색기 · PAYMENTS-API',
   className = 'filetree',
+  isCollapsed: controlledCollapsed,
+  onToggleCollapse,
 }) {
   const fileInputRef = useRef(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [uncontrolledCollapsed, setUncontrolledCollapsed] = useState(false);
+  const [openFolders, setOpenFolders] = useState({});
+
+  const isCollapsed = controlledCollapsed !== undefined ? controlledCollapsed : uncontrolledCollapsed;
+
+  const handleToggleCollapse = (nextState) => {
+    const nextVal = typeof nextState === 'boolean' ? nextState : !isCollapsed;
+    if (onToggleCollapse) {
+      onToggleCollapse(nextVal);
+    } else {
+      setUncontrolledCollapsed(nextVal);
+    }
+  };
+
+  // 폴더 열림/닫힘 상태 판별 (지정된 상태 우선, 없으면 데이터의 isOpen 혹은 기본 true)
+  const isFolderOpen = (node, nodeKey) => {
+    if (openFolders[nodeKey] !== undefined) {
+      return openFolders[nodeKey];
+    }
+    if (node.isOpen !== undefined) {
+      return node.isOpen;
+    }
+    return true;
+  };
+
+  // 폴더 열림/닫힘 토글
+  const toggleFolder = (node, nodeKey) => {
+    const currentOpen = isFolderOpen(node, nodeKey);
+    setOpenFolders((prev) => ({
+      ...prev,
+      [nodeKey]: !currentOpen,
+    }));
+  };
 
   // 기본 트리 데이터
   const defaultTree = [
@@ -99,26 +134,67 @@ export default function FileTree({
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
+    handleToggleCollapse(false);
     processFiles(e.dataTransfer?.files);
   };
 
-  const renderTreeNodes = (nodes, depth = 0) => {
-    return nodes.map((node) => {
+  const renderTreeNodes = (nodes, depth = 0, parentKey = '') => {
+    return nodes.map((node, index) => {
+      const nodeKey = parentKey ? `${parentKey}/${node.name}` : node.name;
       const isSelected = !node.isDir && node.name === activeFile;
-      const paddingLeft = depth === 0 ? '8px' : `${depth * 14 + 8}px`;
+      const paddingLeft = depth === 0 ? '6px' : `${depth * 14 + 6}px`;
+
+      // 폴더 트리의 가장 상위 트리 (depth 0의 첫 번째 디렉토리 노드, e.g. 'src')
+      const isTopmostTree = depth === 0 && index === 0 && node.isDir;
 
       if (node.isDir) {
+        const isOpen = isFolderOpen(node, nodeKey);
         return (
-          <div key={node.name} className="tree-node-group">
+          <div key={nodeKey} className="tree-node-group">
             <div
-              className="tree-row is-dir"
+              className={`tree-row is-dir ${isTopmostTree ? 'is-topmost-dir' : ''}`}
               style={{ paddingLeft }}
+              onClick={() => toggleFolder(node, nodeKey)}
+              role="button"
+              tabIndex={0}
+              title={isOpen ? `${node.name} 폴더 접기` : `${node.name} 폴더 펼치기`}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggleFolder(node, nodeKey);
+                }
+              }}
             >
+              <span className="folder-toggle-icon">
+                {isOpen ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+              </span>
               <span className="folder-name">{node.name}</span>
+
+              {/* 폴더 트리의 가장 상위 트리 맨 오른쪽에 + 버튼 배치 */}
+              {isTopmostTree && showAddButton && (
+                <button
+                  type="button"
+                  className="tree-node-add-btn"
+                  title="컴퓨터에서 파일 추가"
+                  aria-label="컴퓨터에서 파일 추가"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isOpen) {
+                      toggleFolder(node, nodeKey);
+                    }
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = '';
+                      fileInputRef.current.click();
+                    }
+                  }}
+                >
+                  <Plus size={11} />
+                </button>
+              )}
             </div>
-            {node.children && node.children.length > 0 && (
+            {isOpen && node.children && node.children.length > 0 && (
               <div className="tree-children">
-                {renderTreeNodes(node.children, depth + 1)}
+                {renderTreeNodes(node.children, depth + 1, nodeKey)}
               </div>
             )}
           </div>
@@ -127,7 +203,7 @@ export default function FileTree({
 
       return (
         <div
-          key={node.name}
+          key={nodeKey}
           className={`tree-row is-file ${isSelected ? 'selected' : ''}`}
           style={{ paddingLeft }}
           onClick={() => onSelect?.(node.name)}
@@ -146,44 +222,59 @@ export default function FileTree({
 
   return (
     <aside
-      className={`${className} ${isDragOver ? 'drag-over' : ''}`}
+      className={`${className} ${isDragOver ? 'drag-over' : ''} ${isCollapsed ? 'is-collapsed' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="tree-header">
-        <small>{rootLabel}</small>
-        {showAddButton && (
-          <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="tree-file-input"
+        aria-label="파일 업로드 입력창"
+        onChange={handleFileInputChange}
+      />
+      {isCollapsed ? (
+        <div
+          className="tree-collapsed-strip"
+          onClick={() => handleToggleCollapse(false)}
+          title="탐색기 펼치기"
+        >
+          <button
+            type="button"
+            className="tree-collapse-btn"
+            title="탐색기 펼치기"
+            aria-label="탐색기 펼치기"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleCollapse(false);
+            }}
+          >
+            <ChevronDown size={14} />
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="tree-header">
+            <div className="tree-header-left">
+              <small>{rootLabel}</small>
+            </div>
             <button
               type="button"
-              className="tree-add-btn"
-              title="컴퓨터에서 파일 추가"
-              aria-label="컴퓨터에서 파일 추가"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (fileInputRef.current) {
-                  fileInputRef.current.value = '';
-                  fileInputRef.current.click();
-                }
-              }}
+              className="tree-collapse-btn"
+              title="탐색기 축소 (닫기)"
+              aria-label="탐색기 축소 (닫기)"
+              onClick={() => handleToggleCollapse(true)}
             >
-              <Plus size={13} />
+              <ChevronRight size={13} />
             </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="tree-file-input"
-              aria-label="파일 업로드 입력창"
-              onChange={handleFileInputChange}
-            />
-          </>
-        )}
-      </div>
-      <div className="tree-body">
-        {renderTreeNodes(treeData)}
-      </div>
+          </div>
+          <div className="tree-body">
+            {renderTreeNodes(treeData)}
+          </div>
+        </>
+      )}
     </aside>
   );
 }
