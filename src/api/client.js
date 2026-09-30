@@ -2,26 +2,26 @@
  * Axios 클라이언트 및 Mock 시뮬레이션 인터셉터
  * 03 REST API 설계서 공통 규격 준수
  *
- * - 백엔드 연동 전: USE_MOCK = true (mockDb 기반 응답 및 네트워크 딜레이 모사)
- * - 백엔드 연동 후: USE_MOCK = false (실제 Spring Boot http://localhost:8080/api/v1 호출)
+ * - 백엔드 연동 전: IS_MOCK = true (mockDb 기반 응답 및 네트워크 딜레이 모사)
+ * - 백엔드 연동 후: IS_MOCK = false (실제 Spring Boot API 호출)
  */
 
 import axios from 'axios';
 import { mockDb } from '../mock/mockData.js';
 
-// 환경변수 또는 플래그로 Mock 모드 제어 (기본값: true)
-export const USE_MOCK =
+// 환경변수 제어 (기본값: true)
+export const IS_MOCK =
   typeof import.meta !== 'undefined' && import.meta.env?.VITE_USE_MOCK !== undefined
     ? import.meta.env.VITE_USE_MOCK !== 'false'
     : true;
 
-const API_BASE_URL =
+const BASE_URL =
   typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL
     ? import.meta.env.VITE_API_BASE_URL
     : '/api/v1';
 
 export const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: BASE_URL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -31,7 +31,6 @@ export const apiClient = axios.create({
 // 1. 요청 인터셉터: 인증 토큰 주입
 apiClient.interceptors.request.use(
   (config) => {
-    // 세션 토큰 확인 (localStorage)
     const token =
       typeof localStorage !== 'undefined'
         ? localStorage.getItem('codeguard_token') || 'demo_mock_jwt_token'
@@ -46,7 +45,7 @@ apiClient.interceptors.request.use(
 );
 
 // 2. Mock 모드 어댑터: 백엔드 서버 없이도 실제 Axios 요청/응답 파이프라인 검증
-if (USE_MOCK) {
+if (IS_MOCK) {
   apiClient.defaults.adapter = async (config) => {
     // 100ms ~ 250ms 네트워크 딜레이 시뮬레이션
     const latency = Math.floor(Math.random() * 150) + 100;
@@ -56,6 +55,7 @@ if (USE_MOCK) {
     const url = config.url || '';
     const params = config.params || {};
     let body = {};
+
     if (config.data) {
       try {
         body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data;
@@ -175,6 +175,7 @@ if (USE_MOCK) {
   };
 }
 
+// Helper: Mock Response 생성
 function createMockResponse(config, status, data) {
   return {
     data,
@@ -185,6 +186,7 @@ function createMockResponse(config, status, data) {
   };
 }
 
+// Helper: Mock Error Response 생성
 function createMockErrorResponse(config, status, errorCode, message) {
   const error = new Error(message);
   error.response = {
@@ -202,15 +204,18 @@ function createMockErrorResponse(config, status, errorCode, message) {
   return Promise.reject(error);
 }
 
-// 3. 응답 인터셉터: 공통 응답 처리 및 에러 파싱
+// 3. 응답 인터셉터: 공통 응답 언래핑 및 에러 핸들링
 apiClient.interceptors.response.use(
   (response) => {
     return response.data;
   },
   (error) => {
     const errorData = error.response?.data || {};
-    const message = errorData.message || error.message || '네트워크 오류가 발생했습니다.';
-    return Promise.reject(new Error(message));
+    const customError = new Error(errorData.message || error.message || '네트워크 오류가 발생했습니다.');
+    customError.status = error.response?.status || 500;
+    customError.errorCode = errorData.errorCode || 'UNKNOWN_ERROR';
+    
+    return Promise.reject(customError);
   }
 );
 
