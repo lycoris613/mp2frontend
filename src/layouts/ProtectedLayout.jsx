@@ -1,25 +1,11 @@
+import { Outlet } from 'react-router-dom';
 import Sidebar from '../components/layout/Sidebar';
 
-/**
- * 로그인 후 공통 레이아웃 (Sidebar + Main Content)
- * 04 UI화면 설계서 2.1절 및 05 React 컴포넌트 설계서 표 3-1 준수
- */
-export default function ProtectedLayout({
-  page,
-  setPage,
-  currentUser = null,
-  onLogout,
-  children,
-}) {
+export default function ProtectedLayout({ currentUser = null, onLogout }) {
   return (
     <div className="app">
-      <Sidebar
-        page={page}
-        setPage={setPage}
-        currentUser={currentUser}
-        onLogout={onLogout}
-      />
-      {children}
+      <Sidebar currentUser={currentUser} onLogout={onLogout} />
+      <Outlet />
     </div>
   );
 }

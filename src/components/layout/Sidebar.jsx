@@ -1,3 +1,4 @@
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Home,
   ScanSearch,
@@ -7,46 +8,76 @@ import {
   ChevronRight,
   LogIn,
   LogOut,
-  User,
 } from 'lucide-react';
 import { PAGES } from '../../constants/navigation';
 
-/**
- * 좌측 고정 사이드바 컴포넌트
- * 로그인/로그아웃 상태 및 사용자 정보 연동
- *
- * @param {string} page - 현재 활성화된 페이지 ID
- * @param {function} setPage - 페이지 전환 함수
- * @param {object|null} currentUser - 로그인된 사용자 객체
- * @param {function} onLogout - 로그아웃 핸들러
- */
-export default function Sidebar({
-  page,
-  setPage,
-  currentUser = null,
-  onLogout,
-}) {
-  const navItem = (id, Icon, label) => (
-    <button
-      className={`nav-item ${page === id ? 'active' : ''}`}
-      onClick={() => setPage(id)}
-    >
-      <Icon size={15} />
-      <span>{label}</span>
-    </button>
-  );
+export default function Sidebar({ currentUser = null, onLogout }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // URL에서 선택된 project 쿼리 파라미터 추출 (?project=payments-api)
+  const queryParams = new URLSearchParams(location.search);
+  const currentProject = queryParams.get('project');
+  const currentPath = location.pathname;
+
+  // 상단 일반 메뉴 (홈, 코드 분석, 분석 결과)
+  const navItem = (path, Icon, label) => {
+    // 프로젝트가 선택되지 않았고, 경로가 일치할 때만 active
+    const isActive = currentPath === path && !currentProject;
+
+    return (
+      <button
+        type="button"
+        className={`nav-item ${isActive ? 'active' : ''}`}
+        onClick={() => navigate(path)}
+      >
+        <Icon size={15} />
+        <span>{label}</span>
+      </button>
+    );
+  };
+
+  // 프로젝트 클릭 핸들러 (쿼리 파라미터 방식으로 이동)
+  const handleProjectClick = (projectName) => {
+    navigate(`/analyses?project=${projectName}`);
+  };
+
+  // 프로젝트 항목 렌더링 (선택 시 초록 점 + active, 미선택 시 폴더 아이콘)
+  const renderProjectItem = (projectName) => {
+    const isSelected = currentProject === projectName;
+
+    return (
+      <button
+        key={projectName}
+        type="button"
+        className={`project ${isSelected ? 'active' : ''}`}
+        onClick={() => handleProjectClick(projectName)}
+      >
+        {isSelected ? (
+          <span className="dot green"></span>
+        ) : (
+          <Folder size={13} />
+        )}
+        <span>{projectName}</span>
+      </button>
+    );
+  };
 
   return (
     <aside className="sidebar">
-      <div className="brand" onClick={() => setPage(PAGES.HOME)} style={{ cursor: 'pointer' }}>
+      <div
+        className="brand"
+        onClick={() => navigate('/')}
+        style={{ cursor: 'pointer' }}
+      >
         <span className="brand-mark"></span>
         <b>CodeGuard AI</b>
       </div>
 
       <nav>
-        {navItem(PAGES.HOME, Home, '홈')}
-        {navItem(PAGES.ANALYZE, ScanSearch, '코드 분석')}
-        {navItem(PAGES.RESULT, FileSearch2, '분석 결과')}
+        {navItem('/', Home, '홈')}
+        {navItem('/analysis/new', ScanSearch, '코드 분석')}
+        {navItem('/analyses', FileSearch2, '분석 결과')}
       </nav>
 
       <div className="side-search">
@@ -65,29 +96,25 @@ export default function Sidebar({
         <ChevronRight size={12} />
       </div>
 
-      <button className="project active" onClick={() => setPage(PAGES.ANALYZE)}>
-        <Folder size={13} />
-        <span>payments-api</span>
-      </button>
-      <button className="project">
-        <span className="dot green"></span>
-        <span>auth-service</span>
-      </button>
-      <button className="project">
-        <span className="dot green"></span>
-        <span>admin-console</span>
-      </button>
+      {/* 🔹 즐겨찾기 프로젝트 목록 */}
+      {renderProjectItem('payments-api')}
+      {renderProjectItem('auth-service')}
+      {renderProjectItem('admin-console')}
 
       <div className="section-title lower">
         <span>보관함</span>
         <span>3</span>
       </div>
 
-      <button className="add-project-btn" onClick={() => setPage(PAGES.ANALYZE)}>
+      <button
+        type="button"
+        className="add-project-btn"
+        onClick={() => navigate('/analysis/new')}
+      >
         <span>+ 프로젝트 추가</span>
       </button>
 
-      {/* 사이드바 하단 로그인/사용자 상태 바 */}
+      {/* 사이드바 하단 사용자 / 로그인 바 */}
       <div className="sidebar-auth-bottom">
         {currentUser ? (
           <div className="sidebar-user-card">
@@ -99,6 +126,7 @@ export default function Sidebar({
               </div>
             </div>
             <button
+              type="button"
               className="sidebar-logout-btn"
               onClick={onLogout}
               title="로그아웃"
@@ -108,8 +136,9 @@ export default function Sidebar({
           </div>
         ) : (
           <button
+            type="button"
             className="sidebar-login-btn"
-            onClick={() => setPage(PAGES.LOGIN)}
+            onClick={() => navigate('/login')}
           >
             <LogIn size={13} />
             <span>로그인하기</span>
