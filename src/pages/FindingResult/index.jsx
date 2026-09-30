@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation, useParams } from 'react-router-dom';
 import PageHeader from '../../components/layout/PageHeader';
 import FileTree from '../../components/common/FileTree';
 import CodeViewer from '../../components/common/CodeViewer';
@@ -7,11 +8,14 @@ import SeveritySummary from './components/SeveritySummary';
 import FindingDetailPanel from './components/FindingDetailPanel';
 import CodeDiffPanel from './components/CodeDiffPanel';
 import {
-  resultTreeData as initialTreeData,
-  fileFindingData,
+  normalizeProjectId,
+  getProjectTreeData,
+  getProjectFileFindingData,
+  getProjectDefaultFile,
+  getProjectFilePath,
+  resetProjectFindingData,
   calculateDynamicFindingTotals,
   calculateDynamicTypeTabs,
-  resetFileFindingData,
 } from '../../data/findingData';
 import { PAGES } from '../../constants/navigation';
 import { AlertCircle, ArrowRight, RotateCcw, CheckCircle } from 'lucide-react';
@@ -38,7 +42,7 @@ const loadStorageWithFallback = (prefix, projectId, fallback) => {
   const data = loadStorage(specificKey, null);
   if (data !== null) return data;
 
-  // 기본 프로젝트(payments-api 또는 128)라면 이전 전역 키도 확인 (하위 호환성 유지)
+  // 기본 프로젝트(payments-api)인 경우 이전 전역 키도 확인 (하위 호환성 유지)
   if (projectId === 'payments-api' || projectId === '128' || !projectId) {
     const legacyData = loadStorage(prefix, null);
     if (legacyData !== null) return legacyData;
@@ -67,13 +71,10 @@ const removeStorage = (key) => {
 /**
  * [SCR-003] 취약점 분석 결과 화면
  * image/결과화면.png 와이어프레임 최신본 준수
+ * - 사이드바에서 프로젝트(payments-api, auth-service, admin-console) 전환 시 고유 파일 트리 및 코드 로드
  * - 프로젝트별 독립된 코드 파일 저장 및 취약점 해결 상태 격리 (localStorage)
  * - 취약점 해결 시 After 코드 치환 및 범위(이 취약점만/전체 코드)별 반영
  * - 실제 등록된 취약점 데이터 기반 실시간 동적 카운트 집계
- * 
- * @param {string|number} projectId - 개발자 A가 사이드바/라우터에서 전달하는 프로젝트 ID (기본값: 'payments-api')
- * @param {string|number} analysisId - 분석 ID (기본값: 128)
- * @param {string} projectTitle - 프로젝트명 (기본값: 'payments-api')
  */
 export default function FindingResultPage({
   currentUser,
@@ -84,57 +85,142 @@ export default function FindingResultPage({
   analysisId = 128,
   projectTitle = 'payments-api',
 }) {
-  // URL에서 projectId/analysisId 자동 감지 (React Router 연동 호환)
-  // 예: /results/:projectId 또는 /analyses/:analysisId 또는 ?projectId=...
-  const getUrlParamId = () => {
-    if (typeof window === 'undefined') return null;
-    try {
-      // 1) /results/:id 또는 /analyses/:id 경로 패턴 감지
-      const match = window.location.pathname.match(/\/(?:results|analyses)\/([^/?#]+)/);
-      if (match && match[1]) return decodeURIComponent(match[1]);
+  const location = useLocation();
+  const routeParams = useParams();
 
-      // 2) ?projectId=... 또는 ?analysisId=... 쿼리 파라미터 감지
-      const searchParams = new URLSearchParams(window.location.search);
-      const qId = searchParams.get('projectId') || searchParams.get('analysisId');
-      if (qId) return qId;
+  // URL에서 선택된 프로젝트 식별:
+  // 1) 쿼리 파라미터 ?project=... 또는 ?projectId=... 또는 ?analysisId=...
+  // 2) 라우트 파라미터 /results/:projectId 또는 /analyses/:analysisId
+  // 3) 컴포넌트 props (projectId)
+  const getActiveProjectId = () => {
+    try {
+      const searchParams = new URLSearchParams(location.search);
+      const queryProject =
+        searchParams.get('project') ||
+        searchParams.get('projectId') ||
+        searchParams.get('analysisId');
+      if (queryProject) return normalizeProjectId(queryProject);
+
+      if (routeParams.projectId) {
+        return normalizeProjectId(routeParams.projectId);
+      }
+
+      // /results/:id 또는 /analyses/:id 경로 직접 추출
+      const match = location.pathname.match(/\/(?:results|analyses)\/([^/?#]+)/);
+      if (match && match[1]) {
+        return normalizeProjectId(decodeURIComponent(match[1]));
+      }
     } catch (e) {
       // ignore
     }
-    return null;
+    return normalizeProjectId(projectId || analysisId || 'payments-api');
   };
 
-  const [activeUrlId, setActiveUrlId] = useState(getUrlParamId);
+  const currentProjectId = getActiveProjectId();
+  const displayProjectName = currentProjectId;
 
-  // 브라우저 뒤로가기/앞으로가기 및 URL 변경 감지
-  useEffect(() => {
-    const handleLocationChange = () => {
-      setActiveUrlId(getUrlParamId());
-    };
-    window.addEventListener('popstate', handleLocationChange);
-    return () => window.removeEventListener('popstate', handleLocationChange);
-  }, []);
+  // 현재 활성 프로젝트의 원본 파일 데이터 및 기본 선택 파일
+  const currentFileFindingData = getProjectFileFindingData(currentProjectId);
+  const defaultFileForProject = getProjectDefaultFile(currentProjectId);
 
-  const currentProjectId = String(
-    projectId !== 'payments-api' ? projectId : activeUrlId || projectId || analysisId || 'payments-api'
-  );
-  const displayProjectName =
-    projectTitle !== 'payments-api'
-      ? projectTitle
-      : (activeUrlId && isNaN(activeUrlId) ? activeUrlId : projectTitle) || projectId || 'payments-api';
-
-  const [selectedFile, setSelectedFile] = useState('users.ts');
+  const [selectedFile, setSelectedFile] = useState(defaultFileForProject);
   const [activeTab, setActiveTab] = useState('ALL'); // 기본값: 'ALL' (전체)
   const [codeScope, setCodeScope] = useState('finding'); // 'finding' | 'full'
   const [showNoAnalysisModal, setShowNoAnalysisModal] = useState(false);
   const [unAnalyzedFileName, setUnAnalyzedFileName] = useState('');
   const [isTreeCollapsed, setIsTreeCollapsed] = useState(false);
 
+  // 해결 완료된 취약점 ID 목록 (현재 프로젝트 격리 로드)
+  const [resolvedFindingIds, setResolvedFindingIds] = useState(() =>
+    loadStorageWithFallback(STORAGE_PREFIX_RESOLVED, currentProjectId, [])
+  );
+
+  // 파일별 수정 및 저장된 코드 상태 (현재 프로젝트 격리 로드 및 원본 동기화)
+  const [savedFileCodes, setSavedFileCodes] = useState(() => {
+    const saved = loadStorageWithFallback(STORAGE_PREFIX_SAVED_CODES, currentProjectId, {});
+    Object.keys(saved).forEach((fileName) => {
+      if (currentFileFindingData[fileName]) {
+        currentFileFindingData[fileName].codeLines = saved[fileName];
+      }
+    });
+    return saved;
+  });
+
+  // 파일 트리 상태 (현재 프로젝트 격리 로드)
+  const [treeData, setTreeData] = useState(() => {
+    const savedTree = loadStorageWithFallback(STORAGE_PREFIX_TREE, currentProjectId, null);
+    if (savedTree) return savedTree;
+
+    const baseTree = getProjectTreeData(currentProjectId);
+    const initialResolved = loadStorageWithFallback(STORAGE_PREFIX_RESOLVED, currentProjectId, []);
+    if (initialResolved.length > 0) {
+      const updateNodes = (nodes) =>
+        nodes.map((node) => {
+          if (!node.isDir) {
+            const data = currentFileFindingData[node.name];
+            if (data?.finding && initialResolved.includes(data.finding.id)) {
+              return { ...node, hasFinding: false };
+            }
+          }
+          if (node.children) {
+            return { ...node, children: updateNodes(node.children) };
+          }
+          return node;
+        });
+      return updateNodes(baseTree);
+    }
+    return baseTree;
+  });
+
+  // 사이드바 또는 라우터에서 프로젝트가 변경될 때 프로젝트별 격리 데이터 로드
+  useEffect(() => {
+    const fileData = getProjectFileFindingData(currentProjectId);
+    const defaultFile = getProjectDefaultFile(currentProjectId);
+
+    setSelectedFile(defaultFile);
+    setActiveTab('ALL');
+    setShowNoAnalysisModal(false);
+
+    const loadedResolved = loadStorageWithFallback(STORAGE_PREFIX_RESOLVED, currentProjectId, []);
+    setResolvedFindingIds(loadedResolved);
+
+    // 해당 프로젝트의 저장 코드로 동기화
+    const loadedSavedCodes = loadStorageWithFallback(STORAGE_PREFIX_SAVED_CODES, currentProjectId, {});
+    Object.keys(loadedSavedCodes).forEach((fileName) => {
+      if (fileData[fileName]) {
+        fileData[fileName].codeLines = loadedSavedCodes[fileName];
+      }
+    });
+    setSavedFileCodes(loadedSavedCodes);
+
+    const loadedTree = loadStorageWithFallback(STORAGE_PREFIX_TREE, currentProjectId, null);
+    if (loadedTree) {
+      setTreeData(loadedTree);
+    } else {
+      const baseTree = getProjectTreeData(currentProjectId);
+      const updateNodes = (nodes) =>
+        nodes.map((node) => {
+          if (!node.isDir) {
+            const data = fileData[node.name];
+            if (data?.finding && loadedResolved.includes(data.finding.id)) {
+              return { ...node, hasFinding: false };
+            }
+          }
+          if (node.children) {
+            return { ...node, children: updateNodes(node.children) };
+          }
+          return node;
+        });
+      setTreeData(updateNodes(baseTree));
+    }
+  }, [currentProjectId]);
+
   // 상단 취약점 유형 탭 변경 핸들러 (해당 취약점 파일로 스마트 포커스)
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
     if (tabId !== 'ALL') {
-      const matchedFile = Object.keys(fileFindingData).find((fileName) => {
-        const item = fileFindingData[fileName];
+      const matchedFile = Object.keys(currentFileFindingData).find((fileName) => {
+        const item = currentFileFindingData[fileName];
         return (
           item.hasFinding &&
           item.finding?.vulnerabilityType === tabId &&
@@ -147,98 +233,23 @@ export default function FindingResultPage({
     }
   };
 
-  // 해결 완료된 취약점 ID 목록 (프로젝트별 격리 로드)
-  const [resolvedFindingIds, setResolvedFindingIds] = useState(() =>
-    loadStorageWithFallback(STORAGE_PREFIX_RESOLVED, currentProjectId, [])
-  );
-
-  // 파일별 수정 및 저장된 코드 상태 (프로젝트별 격리 로드 및 원본 동기화)
-  const [savedFileCodes, setSavedFileCodes] = useState(() => {
-    const saved = loadStorageWithFallback(STORAGE_PREFIX_SAVED_CODES, currentProjectId, {});
-    Object.keys(saved).forEach((fileName) => {
-      if (fileFindingData[fileName]) {
-        fileFindingData[fileName].codeLines = saved[fileName];
-      }
-    });
-    return saved;
-  });
-
-  // 파일 트리 상태 (프로젝트별 격리 로드)
-  const [treeData, setTreeData] = useState(() => {
-    const savedTree = loadStorageWithFallback(STORAGE_PREFIX_TREE, currentProjectId, null);
-    if (savedTree) return savedTree;
-
-    const initialResolved = loadStorageWithFallback(STORAGE_PREFIX_RESOLVED, currentProjectId, []);
-    if (initialResolved.length > 0) {
-      const updateNodes = (nodes) =>
-        nodes.map((node) => {
-          if (!node.isDir) {
-            const data = fileFindingData[node.name];
-            if (data?.finding && initialResolved.includes(data.finding.id)) {
-              return { ...node, hasFinding: false };
-            }
-          }
-          if (node.children) {
-            return { ...node, children: updateNodes(node.children) };
-          }
-          return node;
-        });
-      return updateNodes(initialTreeData);
-    }
-    return initialTreeData;
-  });
-
-  // 사이드바 또는 라우터에서 프로젝트가 변경될 때 프로젝트별 격리 데이터 로드
-  useEffect(() => {
-    const loadedResolved = loadStorageWithFallback(STORAGE_PREFIX_RESOLVED, currentProjectId, []);
-    setResolvedFindingIds(loadedResolved);
-
-    // 원본 데이터 복원 후 해당 프로젝트의 저장 코드로 재동기화
-    resetFileFindingData();
-    const loadedSavedCodes = loadStorageWithFallback(STORAGE_PREFIX_SAVED_CODES, currentProjectId, {});
-    Object.keys(loadedSavedCodes).forEach((fileName) => {
-      if (fileFindingData[fileName]) {
-        fileFindingData[fileName].codeLines = loadedSavedCodes[fileName];
-      }
-    });
-    setSavedFileCodes(loadedSavedCodes);
-
-    const loadedTree = loadStorageWithFallback(STORAGE_PREFIX_TREE, currentProjectId, null);
-    if (loadedTree) {
-      setTreeData(loadedTree);
-    } else {
-      const updateNodes = (nodes) =>
-        nodes.map((node) => {
-          if (!node.isDir) {
-            const data = fileFindingData[node.name];
-            if (data?.finding && loadedResolved.includes(data.finding.id)) {
-              return { ...node, hasFinding: false };
-            }
-          }
-          if (node.children) {
-            return { ...node, children: updateNodes(node.children) };
-          }
-          return node;
-        });
-      setTreeData(updateNodes(initialTreeData));
-    }
-  }, [currentProjectId]);
-
   // 초기 상태 원상 복구 토스트 알림 상태
   const [showResetToast, setShowResetToast] = useState(false);
 
   // 현재 프로젝트의 코드 및 취약점 정보를 최초 상태로 원상 복구하여 저장
   const handleResetAllToInitial = () => {
-    const { resultTreeData: restoredTree } = resetFileFindingData();
+    const { treeData: restoredTree, defaultFile } = resetProjectFindingData(currentProjectId);
     setSavedFileCodes({});
     setResolvedFindingIds([]);
     setTreeData(restoredTree);
+    setSelectedFile(defaultFile);
+    setActiveTab('ALL');
 
     // 현재 프로젝트의 localStorage 데이터만 격리 초기화
     removeStorage(getStorageKey(STORAGE_PREFIX_RESOLVED, currentProjectId));
     removeStorage(getStorageKey(STORAGE_PREFIX_SAVED_CODES, currentProjectId));
     removeStorage(getStorageKey(STORAGE_PREFIX_TREE, currentProjectId));
-    if (currentProjectId === 'payments-api' || currentProjectId === '128') {
+    if (currentProjectId === 'payments-api') {
       removeStorage(STORAGE_PREFIX_RESOLVED);
       removeStorage(STORAGE_PREFIX_SAVED_CODES);
       removeStorage(STORAGE_PREFIX_TREE);
@@ -253,7 +264,7 @@ export default function FindingResultPage({
   // 파일 선택 처리
   const handleFileSelect = (fileName) => {
     setSelectedFile(fileName);
-    const data = fileFindingData[fileName];
+    const data = currentFileFindingData[fileName];
     if (!data || !data.hasFinding) {
       setUnAnalyzedFileName(fileName);
       setShowNoAnalysisModal(true);
@@ -272,7 +283,7 @@ export default function FindingResultPage({
   };
 
   // 현재 파일 데이터
-  const baseData = fileFindingData[selectedFile] || {
+  const baseData = currentFileFindingData[selectedFile] || {
     hasFinding: false,
     codeLines: [`// ${selectedFile} 내용이 없습니다.`],
     vulnLineIndices: [],
@@ -287,7 +298,6 @@ export default function FindingResultPage({
   const currentCodeLines = savedFileCodes[selectedFile] || baseData.codeLines;
 
   // 현재 파일의 취약점이 선택된 탭(activeTab)과 일치하는지 여부
-  // activeTab이 'ALL'이면 전체 일치, 특정 유형이면 해당 유형만 일치
   const isTypeMatched =
     activeTab === 'ALL' ||
     (baseData.finding && baseData.finding.vulnerabilityType === activeTab);
@@ -300,7 +310,6 @@ export default function FindingResultPage({
     : isCurrentResolved
     ? '✓ 보안 조치 완료 (안전한 코드로 수정됨)'
     : '';
-
 
   // 취약점 해결 클릭 핸들러 (after 코드 치환 및 프로젝트별 영구 저장)
   const handleResolve = (findingId, scope = codeScope) => {
@@ -327,7 +336,7 @@ export default function FindingResultPage({
       [selectedFile]: patchedLines,
     };
     setSavedFileCodes(nextSavedCodes);
-    fileFindingData[selectedFile].codeLines = patchedLines;
+    currentFileFindingData[selectedFile].codeLines = patchedLines;
     saveStorage(getStorageKey(STORAGE_PREFIX_SAVED_CODES, currentProjectId), nextSavedCodes);
 
     // 2) 해결 상태 등록 (메모리 상태 & 프로젝트별 localStorage 영구 보존)
@@ -352,18 +361,11 @@ export default function FindingResultPage({
   };
 
   // 실제 등록된 취약점 기반 동적 카운트 계산
-  const dynamicTabs = calculateDynamicTypeTabs(fileFindingData, resolvedFindingIds);
-  const dynamicTotals = calculateDynamicFindingTotals(fileFindingData, resolvedFindingIds);
+  const dynamicTabs = calculateDynamicTypeTabs(currentFileFindingData, resolvedFindingIds);
+  const dynamicTotals = calculateDynamicFindingTotals(currentFileFindingData, resolvedFindingIds);
 
-  const getSubTitlePath = () => {
-    if (selectedFile === 'users.ts' || selectedFile === 'payments.ts') {
-      return `${displayProjectName} · src/routes/${selectedFile}`;
-    }
-    if (selectedFile === 'package.json') {
-      return `${displayProjectName} · package.json`;
-    }
-    return `${displayProjectName} · src/${selectedFile}`;
-  };
+  // 상단 헤더 경로 표시: 프로젝트명 및 파일 상대경로 연동
+  const headerSubtitle = getProjectFilePath(currentProjectId, selectedFile);
 
   // 현재 취약점 상세 객체 (해결 상태 동기화)
   const currentFindingObj = baseData.finding
@@ -378,7 +380,7 @@ export default function FindingResultPage({
       {/* 상단 헤더 */}
       <PageHeader
         title="취약점 분석 결과"
-        subtitle={getSubTitlePath()}
+        subtitle={headerSubtitle}
         currentUser={currentUser}
         onLogin={onLogin}
         onLogout={onLogout}
@@ -388,7 +390,7 @@ export default function FindingResultPage({
               type="button"
               className="outline-btn reset-btn"
               onClick={handleResetAllToInitial}
-              title="모든 파일의 코드를 취약점이 포함된 원래 상태로 되돌리고 저장합니다"
+              title="이 프로젝트의 모든 파일 코드를 취약점이 포함된 원래 상태로 되돌리고 저장합니다"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -539,7 +541,7 @@ export default function FindingResultPage({
           <CheckCircle size={18} color="#38bdf8" />
           <div>
             <strong style={{ display: 'block', color: '#38bdf8', marginBottom: '2px' }}>원상 복구 완료</strong>
-            <span>모든 파일의 소스코드와 취약점이 초기 테스트 상태로 복구되어 저장되었습니다.</span>
+            <span>{currentProjectId} 프로젝트의 모든 파일 소스코드와 취약점이 초기 상태로 복구되어 저장되었습니다.</span>
           </div>
         </div>
       )}

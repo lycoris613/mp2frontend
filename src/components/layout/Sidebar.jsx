@@ -37,9 +37,9 @@ export default function Sidebar({ currentUser = null, onLogout }) {
     );
   };
 
-  // 프로젝트 클릭 핸들러 (쿼리 파라미터 방식으로 이동)
+  // 프로젝트 클릭 핸들러 (코드 분석 화면으로 이동)
   const handleProjectClick = (projectName) => {
-    navigate(`/analyses?project=${projectName}`);
+    navigate(`/analysis/new?project=${projectName}`);
   };
 
   // 프로젝트 항목 렌더링 (선택 시 초록 점 + active, 미선택 시 폴더 아이콘)
