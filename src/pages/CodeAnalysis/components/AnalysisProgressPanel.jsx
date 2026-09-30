@@ -18,16 +18,19 @@ export default function AnalysisProgressPanel({
   onViewResult,
   fileName = 'users.ts',
   config = {},
+  result = null,
 }) {
   const [percent, setPercent] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
 
+  const findingCount = result?.totalFindings !== undefined ? result.totalFindings : 3;
+
   const steps = [
     '코드 구문 분석 및 AST 파싱 중...',
-    '보안 룰 대조 (SQL 삽입, XSS, 하드코딩 비밀정보)...',
+    '선택 보안 룰 대조 및 취약점 탐지 중...',
     'AI 취약점 영향도 및 신뢰도 평가 중...',
-    '취약점 분석 완료 (3건 발견됨)',
+    `취약점 분석 완료 (${findingCount}건 발견됨)`,
   ];
 
   useEffect(() => {

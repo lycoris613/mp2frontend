@@ -12,6 +12,7 @@ import {
   getProjectDefaultFile,
   getProjectFilePath,
 } from '../../data/findingData';
+import { executeAnalysis } from '../../services/analysisService';
 import { PAGES } from '../../constants/navigation';
 
 /**
@@ -31,7 +32,7 @@ const getInitialFileContents = (projId) => {
  * image/코드입력.png 와이어프레임 최신본 준수
  * - 사이드바에서 프로젝트 선택 시 해당 프로젝트의 파일 목록과 코드 로드
  * - 파일 탐색기, + 로컬 파일 추가, 코드 뷰어, 분석 설정 연동
- * - 분석 완료 후 결과 보기 클릭 시 해당 프로젝트의 분석 결과(/analyses?project=...)로 이동
+ * - 분석 완료 후 결과 보기 클릭 시 해당 프로젝트의 분석 결과(/analyses?project=...&analysisId=...)로 이동
  */
 export default function CodeAnalysisPage({ setPage, currentUser, onLogin, onLogout }) {
   const location = useLocation();
@@ -47,6 +48,7 @@ export default function CodeAnalysisPage({ setPage, currentUser, onLogin, onLogo
   const [selectedFile, setSelectedFile] = useState(() => getProjectDefaultFile(currentProjectId));
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisConfig, setAnalysisConfig] = useState(null);
+  const [analysisResult, setAnalysisResult] = useState(null);
   const [isTreeCollapsed, setIsTreeCollapsed] = useState(false);
 
   // 사이드바에서 프로젝트 전환 시 해당 프로젝트의 파일 트리와 코드 동기화
@@ -56,20 +58,41 @@ export default function CodeAnalysisPage({ setPage, currentUser, onLogin, onLogo
     setSelectedFile(getProjectDefaultFile(currentProjectId));
   }, [currentProjectId]);
 
-  const handleStartAnalysis = (config) => {
+  const handleStartAnalysis = async (config) => {
     setAnalysisConfig(config);
     setIsAnalyzing(true);
+    setAnalysisResult(null);
+
+    try {
+      const result = await executeAnalysis({
+        projectId: currentProjectId,
+        title: config.title,
+        scope: config.scope,
+        selectedFile,
+        rules: config.rules,
+        fileContents,
+        treeData,
+      });
+      setAnalysisResult(result);
+    } catch (err) {
+      console.error('분석 실행 실패:', err);
+    }
   };
 
   const handleCloseModal = () => {
     setIsAnalyzing(false);
   };
 
-  // 분석 완료 후 결과 보기 클릭 시 해당 프로젝트의 분석 결과 화면으로 이동
+  // 분석 완료 후 결과 보기 클릭 시 해당 분석 ID가 반영된 결과 화면으로 이동
   const handleViewResult = () => {
     setIsAnalyzing(false);
+    const aId = analysisResult?.analysisId;
+    const targetUrl = aId
+      ? `/analyses?project=${currentProjectId}&analysisId=${aId}`
+      : `/analyses?project=${currentProjectId}`;
+
     if (typeof navigate === 'function') {
-      navigate(`/analyses?project=${currentProjectId}`);
+      navigate(targetUrl);
     } else if (typeof setPage === 'function') {
       setPage(PAGES.RESULT);
     }
@@ -162,6 +185,7 @@ export default function CodeAnalysisPage({ setPage, currentUser, onLogin, onLogo
         onViewResult={handleViewResult}
         fileName={selectedFile}
         config={analysisConfig}
+        result={analysisResult}
       />
     </main>
   );
