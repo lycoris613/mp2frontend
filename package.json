@@ -1,14 +1,14 @@
-{
-  "name": "codeguard-ai-frontend",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
+ {
+      "name": "codeguard-ai-frontend",
+      "private": true,
+      "version": "0.1.0",
+      "type": "module",
+      "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview"
+      },
+      "dependencies": {
         "@vitejs/plugin-react": "latest",
         "axios": "^1.20.0",
         "lucide-react": "latest",
@@ -19,4 +19,4 @@
         "vite": "latest",
         "zustand": "^5.0.15"
       }
-}
+    }
