@@ -9,21 +9,32 @@ import {
   LogIn,
   LogOut,
 } from 'lucide-react';
-import { PAGES } from '../../constants/navigation';
 
 export default function Sidebar({ currentUser = null, onLogout }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // URL에서 선택된 project 쿼리 파라미터 추출 (?project=payments-api)
-  const queryParams = new URLSearchParams(location.search);
-  const currentProject = queryParams.get('project');
   const currentPath = location.pathname;
+
+  // 1) 쿼리 파라미터 (?project=payments-api)
+  const queryParams = new URLSearchParams(location.search);
+  const queryProject = queryParams.get('project');
+
+  // 2) 경로 파라미터 (/results/auth-service 또는 /analyses/auth-service)
+  const pathParts = currentPath.split('/');
+  const pathProject = (currentPath.startsWith('/results/') || currentPath.startsWith('/analyses/')) 
+    ? pathParts[pathParts.length - 1] 
+    : null;
+
+  // 현재 선택된 프로젝트
+  const currentProject = queryProject || pathProject;
 
   // 상단 일반 메뉴 (홈, 코드 분석, 분석 결과)
   const navItem = (path, Icon, label) => {
-    // 프로젝트가 선택되지 않았고, 경로가 일치할 때만 active
-    const isActive = currentPath === path && !currentProject;
+    // 💡 프로젝트 선택 시 '코드 분석' 메뉴도 함께 하이라이트
+    const isActive = 
+      (currentPath === path && !currentProject) || 
+      (currentProject && label === '코드 분석');
 
     return (
       <button
@@ -37,12 +48,12 @@ export default function Sidebar({ currentUser = null, onLogout }) {
     );
   };
 
-  // 프로젝트 클릭 핸들러 (쿼리 파라미터 방식으로 이동)
+  // 프로젝트 클릭 핸들러 (/results/:projectId로 이동)
   const handleProjectClick = (projectName) => {
-    navigate(`/analyses?project=${projectName}`);
+    navigate(`/results/${projectName}`);
   };
 
-  // 프로젝트 항목 렌더링 (선택 시 초록 점 + active, 미선택 시 폴더 아이콘)
+  // 프로젝트 항목 렌더링
   const renderProjectItem = (projectName) => {
     const isSelected = currentProject === projectName;
 
