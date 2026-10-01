@@ -204,17 +204,43 @@ function createMockErrorResponse(config, status, errorCode, message) {
   return Promise.reject(error);
 }
 
-// 3. 응답 인터셉터: 공통 응답 언래핑 및 에러 핸들링
+// 3. 응답 인터셉터: 공통 응답 언래핑 및 401/403/500 보안/에러 핸들링
 apiClient.interceptors.response.use(
   (response) => {
     return response.data;
   },
   (error) => {
+    const status = error.response?.status;
     const errorData = error.response?.data || {};
-    const customError = new Error(errorData.message || error.message || '네트워크 오류가 발생했습니다.');
-    customError.status = error.response?.status || 500;
+    const message = errorData.message || error.message || '네트워크 오류가 발생했습니다.';
+
+    // 401, 403, 500 공통 에러 핸들링
+    switch (status) {
+      case 401:
+        alert('세션이 만료되었습니다. 다시 로그인해 주세요.');
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem('codeguard_token');
+        }
+        window.location.href = '/login';
+        break;
+
+      case 403:
+        alert('접근 권한이 없습니다.');
+        break;
+
+      case 500:
+        alert('서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+        break;
+
+      default:
+        console.error(`[API Error ${status}]:`, message);
+        break;
+    }
+
+    const customError = new Error(message);
+    customError.status = status || 500;
     customError.errorCode = errorData.errorCode || 'UNKNOWN_ERROR';
-    
+
     return Promise.reject(customError);
   }
 );
