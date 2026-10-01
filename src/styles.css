@@ -752,18 +752,115 @@ button {
   color:#1f2937;
 }
 
-/* 취약 라인 테두리 박스 하이라이트 (라인 6) */
+/* 취약 라인 테두리 박스 하이라이트 (일반 탐지 라인) */
 .code-line.vuln-line-highlight {
-  border:1px solid #ef4444;
-  background:#fef2f2;
-  border-radius:4px;
-  margin:1px 10px;
-  padding:1px 2px;
+  border: 1px solid #f87171;
+  background: rgba(254, 242, 242, 0.7);
+  margin: 1px 10px;
+  padding: 1px 2px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+/* 단일 라인 취약점 블럭 */
+.code-line.vuln-line-highlight.vuln-block-single {
+  border-radius: 4px;
+  margin: 1px 10px;
+}
+
+/* 다중 라인 취약점: 하나의 연결된 단일 블럭으로 표시 */
+/* 1) 시작 라인: 상단 모서리 라운딩, 하단 테두리/마진 제거 */
+.code-line.vuln-line-highlight.vuln-block-start {
+  border-bottom: none !important;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  margin-top: 1px;
+  margin-bottom: 0 !important;
+}
+
+/* 2) 중간 라인: 좌우 테두리만 유지, 상하 테두리/마진/라운딩 제거 */
+.code-line.vuln-line-highlight.vuln-block-middle {
+  border-top: none !important;
+  border-bottom: none !important;
+  border-radius: 0;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* 3) 종료 라인: 하단 모서리 라운딩, 상단 테두리/마진 제거 */
+.code-line.vuln-line-highlight.vuln-block-end {
+  border-top: none !important;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+  margin-top: 0 !important;
+  margin-bottom: 1px;
+}
+
+.code-line.vuln-line-highlight:hover,
+.code-line.vuln-line-highlight.vuln-block-hovered {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
+
+/* 현재 포커스/선택된 취약 라인 (더 진한 단일 블럭 하이라이트) */
+.code-line.vuln-active-highlight {
+  border: 2px solid #b91c1c !important;
+  background: #fecaca !important;
+  position: relative;
+  z-index: 2;
+}
+
+/* 활성 취약점: 단일 라인 블럭 */
+.code-line.vuln-active-highlight.vuln-block-single {
+  border-radius: 4px !important;
+  margin: 1px 10px !important;
+  box-shadow: 0 0 0 2px rgba(185, 28, 28, 0.35) !important;
+}
+
+/* 활성 취약점 다중 라인: 상하 경계선 없이 완벽하게 하나의 박스로 연결 */
+.code-line.vuln-active-highlight.vuln-block-start {
+  border-bottom: none !important;
+  border-top-left-radius: 4px !important;
+  border-top-right-radius: 4px !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  margin-top: 1px !important;
+  margin-bottom: 0 !important;
+  box-shadow: -2px 0 0 0 rgba(185, 28, 28, 0.35), 2px 0 0 0 rgba(185, 28, 28, 0.35), 0 -2px 0 0 rgba(185, 28, 28, 0.35) !important;
+}
+
+.code-line.vuln-active-highlight.vuln-block-middle {
+  border-top: none !important;
+  border-bottom: none !important;
+  border-radius: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  box-shadow: -2px 0 0 0 rgba(185, 28, 28, 0.35), 2px 0 0 0 rgba(185, 28, 28, 0.35) !important;
+}
+
+.code-line.vuln-active-highlight.vuln-block-end {
+  border-top: none !important;
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+  border-bottom-left-radius: 4px !important;
+  border-bottom-right-radius: 4px !important;
+  margin-top: 0 !important;
+  margin-bottom: 1px !important;
+  box-shadow: -2px 0 0 0 rgba(185, 28, 28, 0.35), 2px 0 0 0 rgba(185, 28, 28, 0.35), 0 2px 0 0 rgba(185, 28, 28, 0.35) !important;
 }
 
 .code-line.vuln-line-highlight code {
-  color:#b91c1c;
-  font-weight:600;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.code-line.vuln-active-highlight code {
+  color: #991b1b !important;
+  font-weight: 700 !important;
 }
 
 .code-tag-row {

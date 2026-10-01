@@ -116,22 +116,44 @@ export async function executeAnalysis({
       item.codeLines = [...fileContents[fileName]];
     }
 
-    // [규칙 1] 범위 필터: '현재 파일' 모드라면 선택된 파일이 아닌 파일의 취약점은 제외 (클린 처리)
-    const isTargetFile = scope === '전체 프로젝트' || fileName === selectedFile;
+    // [규칙 1] 파일 범위 필터: '전체 프로젝트'가 아닌 경우 선택된 파일만 검사
+    const isTargetFile = scope === '전체 프로젝트' ? true : fileName === selectedFile;
 
-    // [규칙 2] 룰 필터: 체크된 룰에 해당하는 취약점인지 검사
-    const vulnType = item.finding?.vulnerabilityType;
-    const isRuleActive = vulnType && activeRules.includes(vulnType);
+    // 원본 파일에 등록된 모든 취약점 목록 가져오기 (단일 또는 다중 취약점)
+    const rawFindings = Array.isArray(original.findings) && original.findings.length > 0
+      ? original.findings
+      : (original.finding ? [original.finding] : []);
 
-    if (item.hasFinding && isTargetFile && isRuleActive) {
+    const detectedFindings = [];
+
+    if (isTargetFile && rawFindings.length > 0) {
+      rawFindings.forEach((finding) => {
+        // [규칙 2] 룰 필터: 체크된 룰에 해당하는 취약점인지 검사
+        const isRuleActive = activeRules.includes(finding.vulnerabilityType);
+
+        if (isRuleActive) {
+          detectedFindings.push(finding);
+        }
+      });
+    }
+
+    if (detectedFindings.length > 0) {
       item.hasFinding = true;
-      totalFindingsCount++;
+      item.findings = detectedFindings;
+      item.finding = detectedFindings[0];
+      item.vulnLineIndices = [...new Set(detectedFindings.flatMap((f) => f.vulnLineIndices || []))];
+      item.tagLabel = detectedFindings.length > 1
+        ? `${detectedFindings.length}개 보안 취약점 탐지됨 (${detectedFindings.map(f => f.vulnerabilityType).join(' · ')})`
+        : (detectedFindings[0].tagLabel || '');
+      item.diff = detectedFindings[0].diff;
+      totalFindingsCount += detectedFindings.length;
     } else {
-      // 분석 대상이 아니거나 탐지 룰이 비활성화된 경우 클린 상태로 조정
+      // 분석 대상이 아니거나 탐지 룰에 일치하지 않는 경우 클린 상태로 조정
       item.hasFinding = false;
+      item.findings = [];
+      item.finding = null;
       item.vulnLineIndices = [];
       item.tagLabel = '';
-      item.finding = null;
       item.diff = null;
     }
 
@@ -255,12 +277,24 @@ export async function updateFindingStatusOnAnalysis({
     const run = getStorageItem(runKey, null);
     if (run && run.fileFindingData) {
       Object.keys(run.fileFindingData).forEach((file) => {
-        if (run.fileFindingData[file]?.finding?.id === findingId) {
-          run.fileFindingData[file].finding.status = status;
-          if (status === 'RESOLVED') {
-            run.fileFindingData[file].hasFinding = false;
-          }
+        const item = run.fileFindingData[file];
+        if (!item) return;
+
+        const list = Array.isArray(item.findings) && item.findings.length > 0
+          ? item.findings
+          : (item.finding ? [item.finding] : []);
+
+        const target = list.find((f) => f.id === findingId);
+        if (target) {
+          target.status = status;
         }
+        if (item.finding && item.finding.id === findingId) {
+          item.finding.status = status;
+        }
+
+        // 파일 내에 아직 미해결(OPEN) 상태인 취약점이 하나라도 있는지 판별
+        const hasOpen = list.some((f) => f.status !== 'RESOLVED');
+        item.hasFinding = hasOpen;
       });
       setStorageItem(runKey, run);
     }

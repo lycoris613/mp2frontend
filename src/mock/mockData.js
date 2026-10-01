@@ -209,23 +209,59 @@ export const initialFileContents = {
     relativePath: 'src/routes/users.ts',
     fileName: 'users.ts',
     language: 'TypeScript',
-    lineCount: 9,
+    lineCount: 31,
     content: `import express from 'express';
 import db from './database';
 
-app.get('/api/users', async (req, res) => {
+const router = express.Router();
+
+// [기능 1] 사용자 상세 조회 (취약점: SQL Injection)
+router.get('/api/users', async (req, res) => {
   const userId = req.query.id;
   const query = \`SELECT * FROM users WHERE id = \${userId}\`;
   const result = await db.query(query);
   res.json(result.rows);
-});`,
+});
+
+// [기능 2] 관리자 권한 인증 헬퍼 (취약점: Hardcoded Secret)
+const ADMIN_MASTER_KEY = 'sec_master_key_2026_super_auth_token_99x';
+
+function verifyAdminAccess(token: string) {
+  if (token === ADMIN_MASTER_KEY) {
+    return { isAdmin: true, role: 'SUPERUSER' };
+  }
+  return { isAdmin: false, role: 'GUEST' };
+}
+
+// [기능 3] 사용자 프로필 카드 렌더링 (취약점: Reflected XSS)
+router.get('/api/users/profile', (req, res) => {
+  const nickname = req.query.name || 'Anonymous';
+  const profileHtml = \`<div class="profile-card"><h3>사용자: \${nickname}</h3></div>\`;
+  res.send(profileHtml);
+});
+
+export default router;`,
     findingMarkers: [
       {
         findingId: 9001,
-        startLine: 6,
-        endLine: 6,
+        startLine: 9,
+        endLine: 9,
         severity: 'CRITICAL',
         label: 'SQL 삽입 가능성 · 치명적',
+      },
+      {
+        findingId: 9005,
+        startLine: 15,
+        endLine: 15,
+        severity: 'HIGH',
+        label: '하드코딩된 비밀정보 · 높음',
+      },
+      {
+        findingId: 9006,
+        startLine: 27,
+        endLine: 27,
+        severity: 'MEDIUM',
+        label: 'XSS 스크립트 삽입 가능성 · 중간',
       },
     ],
   },

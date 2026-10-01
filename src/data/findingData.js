@@ -54,38 +54,168 @@ export const PROJECTS_DATA = {
         codeLines: [
           "import express from 'express';",
           "import db from './database';",
-          "",
-          "app.get('/api/users', async (req, res) => {",
-          "  const userId = req.query.id;",
-          "  const query = `SELECT * FROM users WHERE id = ${userId}`;",
-          "  const result = await db.query(query);",
-          "  res.json(result.rows);",
-          "});",
+          '',
+          'const router = express.Router();',
+          '',
+          '// [기능 1] 사용자 상세 조회 (취약점: SQL Injection)',
+          "router.get('/api/users', async (req, res) => {",
+          '  const userId = req.query.id;',
+          '  const query = `SELECT * FROM users WHERE id = ${userId}`;',
+          '  const result = await db.query(query);',
+          '  res.json(result.rows);',
+          '});',
+          '',
+          '// [기능 2] 관리자 권한 인증 헬퍼 (취약점: Hardcoded Secret)',
+          "const ADMIN_MASTER_KEY = 'sec_master_key_2026_super_auth_token_99x';",
+          '',
+          'function verifyAdminAccess(token: string) {',
+          '  if (token === ADMIN_MASTER_KEY) {',
+          "    return { isAdmin: true, role: 'SUPERUSER' };",
+          '  }',
+          "  return { isAdmin: false, role: 'GUEST' };",
+          '}',
+          '',
+          '// [기능 3] 사용자 프로필 카드 렌더링 (취약점: Reflected XSS)',
+          "router.get('/api/users/profile', (req, res) => {",
+          "  const nickname = req.query.name || 'Anonymous';",
+          '  const profileHtml = `<div class="profile-card"><h3>사용자: ${nickname}</h3></div>`;',
+          '  res.send(profileHtml);',
+          '});',
+          '',
+          'export default router;',
         ],
-        vulnLineIndices: [5], // 라인 6
-        tagLabel: 'SQL 삽입 가능성 · 치명적',
+        vulnLineIndices: [7, 8, 14, 25, 26], // 라인 8-9 (SQLI 2줄), 라인 15 (Secret 1줄), 라인 26-27 (XSS 2줄)
+        tagLabel: '3개 보안 취약점 탐지됨 (SQLI · Secret · XSS)',
+        findings: [
+          {
+            id: 1,
+            vulnerabilityType: 'SQL_INJECTION',
+            severity: 'CRITICAL',
+            title: 'SQL 삽입 취약점 (SQL Injection)',
+            severityBadge: '치명적 98% · CWE-89',
+            cwe: 'CWE-89',
+            confidence: '97%',
+            status: 'OPEN',
+            line: 8,
+            vulnLineIndices: [7, 8],
+            tagLabel: 'SQL 삽입 취약점 · 치명적 (라인 8-9)',
+            detectionSource: {
+              title: '탐지 근거 · 룰 기반',
+              ruleId: 'SQLI-001',
+              ruleTitle: '문자열 연결 SQL 쿼리',
+              matchedCode: 'const query = `SELECT * FROM users WHERE id = ${userId}`;',
+            },
+            description: '사용자 입력값이 검증 없이 SQL 쿼리 문자열에 직접 삽입되어 임의의 SQL 명령이 실행될 수 있습니다.',
+            recommendation: '문자열 보간을 제거하고 매개변수화 쿼리($1) 사용 및 입력 ID 형식 검증.',
+            impact: '인가되지 않은 데이터 조회, 데이터베이스 변조 및 명령 실행 위험이 있습니다.',
+            diff: {
+              fileName: 'users.ts',
+              startLine: 8,
+              beforeLines: [
+                '  const userId = req.query.id;',
+                '  const query = `SELECT * FROM users WHERE id = ${userId}`;',
+                '  const result = await db.query(query);',
+              ],
+              afterLines: [
+                '  const userId = validateUserId(req.query.id);',
+                "  const query = 'SELECT * FROM users WHERE id = $1';",
+                '  const result = await db.query(query, [userId]);',
+              ],
+            },
+          },
+          {
+            id: 20,
+            vulnerabilityType: 'HARDCODED_SECRET',
+            severity: 'HIGH',
+            title: '하드코딩된 관리자 인증 마스터 키 (Hardcoded Secret)',
+            severityBadge: '높음 94% · CWE-798',
+            cwe: 'CWE-798',
+            confidence: '94%',
+            status: 'OPEN',
+            line: 15,
+            vulnLineIndices: [14],
+            tagLabel: '하드코딩된 비밀정보 · 높음 (라인 15)',
+            detectionSource: {
+              title: '탐지 근거 · 시크릿 정적 스캐너',
+              ruleId: 'SEC-004',
+              ruleTitle: '하드코딩된 마스터 인증 키 탐지',
+              matchedCode: "const ADMIN_MASTER_KEY = 'sec_master_key_2026_super_auth_token_99x';",
+            },
+            description: '관리자 권한을 부여하는 마스터 키가 소스코드 내 평문 문자열 상수로 하드코딩되어 있습니다.',
+            recommendation: '환경 변수(process.env) 또는 보안 키 관리 서비스(KMS / Vault)로부터 주입받도록 수정하세요.',
+            impact: '소스코드 노출 시 모든 관리자 권한 탈취 및 비인가 시스템 조작 위험이 있습니다.',
+            diff: {
+              fileName: 'users.ts',
+              startLine: 15,
+              beforeLines: [
+                "const ADMIN_MASTER_KEY = 'sec_master_key_2026_super_auth_token_99x';",
+              ],
+              afterLines: [
+                "const ADMIN_MASTER_KEY = process.env.ADMIN_MASTER_KEY;",
+                "if (!ADMIN_MASTER_KEY) throw new Error('ADMIN_MASTER_KEY 환경변수 누락');",
+              ],
+            },
+          },
+          {
+            id: 30,
+            vulnerabilityType: 'XSS',
+            severity: 'MEDIUM',
+            title: '반사형 크로스 사이트 스크립팅 취약점 (XSS)',
+            severityBadge: '중간 88% · CWE-79',
+            cwe: 'CWE-79',
+            confidence: '88%',
+            status: 'OPEN',
+            line: 26,
+            vulnLineIndices: [25, 26],
+            tagLabel: 'XSS 스크립트 삽입 가능성 · 중간 (라인 26-27)',
+            detectionSource: {
+              title: '탐지 근거 · XSS 인젝션 분석',
+              ruleId: 'XSS-001',
+              ruleTitle: 'HTML 출력 내 비이스케이프 파라미터 삽입',
+              matchedCode: 'const profileHtml = `<div class="profile-card"><h3>사용자: ${nickname}</h3></div>`;',
+            },
+            description: '쿼리 파라미터 name 값이 이스케이프 처리 없이 HTML 템플릿에 직접 렌더링되어 악성 스크립트가 실행될 수 있습니다.',
+            recommendation: 'HTML 이스케이프 함수(escapeHtml)를 사용하거나 JSON API 형식으로 응답을 반환하세요.',
+            impact: '사용자 브라우저 세션 탈취, 피싱 및 악성 스크립트 실행 위험이 있습니다.',
+            diff: {
+              fileName: 'users.ts',
+              startLine: 26,
+              beforeLines: [
+                "  const nickname = req.query.name || 'Anonymous';",
+                '  const profileHtml = `<div class="profile-card"><h3>사용자: ${nickname}</h3></div>`;',
+              ],
+              afterLines: [
+                "  const nickname = escapeHtml(String(req.query.name || 'Anonymous'));",
+                '  const profileHtml = `<div class="profile-card"><h3>사용자: ${nickname}</h3></div>`;',
+              ],
+            },
+          },
+        ],
         finding: {
           id: 1,
           vulnerabilityType: 'SQL_INJECTION',
           severity: 'CRITICAL',
-          title: 'SQL 삽입 취약점',
+          title: 'SQL 삽입 취약점 (SQL Injection)',
           severityBadge: '치명적 98% · CWE-89',
           cwe: 'CWE-89',
           confidence: '97%',
           status: 'OPEN',
+          line: 8,
+          vulnLineIndices: [7, 8],
+          tagLabel: 'SQL 삽입 취약점 · 치명적 (라인 8-9)',
           detectionSource: {
             title: '탐지 근거 · 룰 기반',
             ruleId: 'SQLI-001',
             ruleTitle: '문자열 연결 SQL 쿼리',
-            matchedCode: 'SELECT * FROM users WHERE id = ${userId}',
+            matchedCode: 'const query = `SELECT * FROM users WHERE id = ${userId}`;',
           },
-          description: '사용자 입력값이 검증 없이 SQL 쿼리 문자열에 직접 삽입됩니다.',
-          recommendation: '문자열 보간 제거, 매개변수화 쿼리 사용 및 입력 ID 형식 검증.',
+          description: '사용자 입력값이 검증 없이 SQL 쿼리 문자열에 직접 삽입되어 임의의 SQL 명령이 실행될 수 있습니다.',
+          recommendation: '문자열 보간을 제거하고 매개변수화 쿼리($1) 사용 및 입력 ID 형식 검증.',
           impact: '인가되지 않은 데이터 조회, 데이터베이스 변조 및 명령 실행 위험이 있습니다.',
         },
         diff: {
           fileName: 'users.ts',
-          startLine: 5,
+          startLine: 8,
           beforeLines: [
             '  const userId = req.query.id;',
             '  const query = `SELECT * FROM users WHERE id = ${userId}`;',
@@ -99,16 +229,36 @@ export const PROJECTS_DATA = {
           fullCleanCodeLines: [
             "import express from 'express';",
             "import db from './database';",
-            "import { validateUserId } from '../utils/validation';",
-            "",
-            "const app = express();",
-            "",
-            "app.get('/api/users', async (req, res) => {",
-            "  const userId = validateUserId(req.query.id);",
+            "import { validateUserId, escapeHtml } from '../utils/security';",
+            '',
+            'const router = express.Router();',
+            '',
+            '// [기능 1] 사용자 상세 조회 (안전한 매개변수화 쿼리)',
+            "router.get('/api/users', async (req, res) => {",
+            '  const userId = validateUserId(req.query.id);',
             "  const query = 'SELECT * FROM users WHERE id = $1';",
-            "  const result = await db.query(query, [userId]);",
-            "  res.json(result.rows);",
-            "});",
+            '  const result = await db.query(query, [userId]);',
+            '  res.json(result.rows);',
+            '});',
+            '',
+            '// [기능 2] 관리자 권한 인증 헬퍼 (환경변수 주입)',
+            'const ADMIN_MASTER_KEY = process.env.ADMIN_MASTER_KEY;',
+            '',
+            'function verifyAdminAccess(token: string) {',
+            '  if (ADMIN_MASTER_KEY && token === ADMIN_MASTER_KEY) {',
+            "    return { isAdmin: true, role: 'SUPERUSER' };",
+            '  }',
+            "  return { isAdmin: false, role: 'GUEST' };",
+            '}',
+            '',
+            '// [기능 3] 사용자 프로필 카드 렌더링 (XSS 방어 이스케이프)',
+            "router.get('/api/users/profile', (req, res) => {",
+            "  const nickname = escapeHtml(String(req.query.name || 'Anonymous'));",
+            '  const profileHtml = `<div class="profile-card"><h3>사용자: ${nickname}</h3></div>`;',
+            '  res.send(profileHtml);',
+            '});',
+            '',
+            'export default router;',
           ],
         },
       },
@@ -1084,14 +1234,14 @@ export function resetProjectFindingData(projectId) {
   const normId = normalizeProjectId(projectId);
   const restoredProject = JSON.parse(JSON.stringify(ORIGINAL_PROJECTS_SNAPSHOT[normId]));
   
-  // 객체 덮어쓰기
-  PROJECTS_DATA[normId].treeData = restoredProject.treeData;
-  PROJECTS_DATA[normId].fileFindingData = restoredProject.fileFindingData;
+  // 객체 덮어쓰기 (독립적인 딥카피 복원)
+  PROJECTS_DATA[normId].treeData = JSON.parse(JSON.stringify(restoredProject.treeData));
+  PROJECTS_DATA[normId].fileFindingData = JSON.parse(JSON.stringify(restoredProject.fileFindingData));
 
   return {
     projectId: normId,
     treeData: JSON.parse(JSON.stringify(restoredProject.treeData)),
-    fileFindingData: restoredProject.fileFindingData,
+    fileFindingData: JSON.parse(JSON.stringify(restoredProject.fileFindingData)),
     defaultFile: restoredProject.defaultFile,
   };
 }
@@ -1112,13 +1262,19 @@ export function calculateDynamicFindingTotals(fileData = PROJECTS_DATA['payments
   let total = 0;
 
   Object.values(fileData).forEach((item) => {
-    if (item.hasFinding && item.finding) {
-      if (resolvedIds.includes(item.finding.id)) return;
-      total++;
-      const sev = item.finding.severity;
-      if (sev === 'CRITICAL') critical++;
-      else if (sev === 'HIGH') high++;
-      else mediumLow++;
+    if (item.hasFinding) {
+      const findingsList = Array.isArray(item.findings) && item.findings.length > 0
+        ? item.findings
+        : (item.finding ? [item.finding] : []);
+
+      findingsList.forEach((finding) => {
+        if (!finding || resolvedIds.includes(finding.id)) return;
+        total++;
+        const sev = finding.severity;
+        if (sev === 'CRITICAL') critical++;
+        else if (sev === 'HIGH') high++;
+        else mediumLow++;
+      });
     }
   });
 
@@ -1140,13 +1296,19 @@ export function calculateDynamicTypeTabs(fileData = PROJECTS_DATA['payments-api'
   let totalActive = 0;
 
   Object.values(fileData).forEach((item) => {
-    if (item.hasFinding && item.finding) {
-      if (resolvedIds.includes(item.finding.id)) return;
-      totalActive++;
-      const type = item.finding.vulnerabilityType;
-      if (counts[type] !== undefined) {
-        counts[type]++;
-      }
+    if (item.hasFinding) {
+      const findingsList = Array.isArray(item.findings) && item.findings.length > 0
+        ? item.findings
+        : (item.finding ? [item.finding] : []);
+
+      findingsList.forEach((finding) => {
+        if (!finding || resolvedIds.includes(finding.id)) return;
+        totalActive++;
+        const type = finding.vulnerabilityType;
+        if (counts[type] !== undefined) {
+          counts[type]++;
+        }
+      });
     }
   });
 

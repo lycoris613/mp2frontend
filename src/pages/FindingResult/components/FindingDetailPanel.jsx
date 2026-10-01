@@ -12,11 +12,13 @@ import { currentFinding } from '../../../data/findingData';
  */
 export default function FindingDetailPanel({
   finding = currentFinding,
+  scope: controlledScope,
   onResolve,
   onIgnore,
   onScopeChange,
 }) {
-  const [scope, setScope] = useState('finding'); // 'finding' | 'full'
+  const [internalScope, setInternalScope] = useState('finding'); // 'finding' | 'full'
+  const scope = controlledScope !== undefined ? controlledScope : internalScope;
   const [status, setStatus] = useState('OPEN'); // 'OPEN' | 'RESOLVED' | 'IGNORED'
   const findingId = finding?.id || finding?.findingId;
 
@@ -37,7 +39,7 @@ export default function FindingDetailPanel({
   };
 
   const handleScopeSelect = (newScope) => {
-    setScope(newScope);
+    setInternalScope(newScope);
     onScopeChange?.(newScope);
   };
 

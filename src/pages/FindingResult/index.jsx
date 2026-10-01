@@ -119,6 +119,7 @@ export default function FindingResultPage({
 
   const [selectedFile, setSelectedFile] = useState(defaultFileForProject);
   const [activeTab, setActiveTab] = useState('ALL'); // 기본값: 'ALL' (전체)
+  const [activeFindingId, setActiveFindingId] = useState(null); // 한 파일 내 다중 취약점 중 포커스된 ID
   const [codeScope, setCodeScope] = useState('finding'); // 'finding' | 'full'
   const [showNoAnalysisModal, setShowNoAnalysisModal] = useState(false);
   const [unAnalyzedFileName, setUnAnalyzedFileName] = useState('');
@@ -155,7 +156,11 @@ export default function FindingResultPage({
         nodes.map((node) => {
           if (!node.isDir) {
             const data = currentFileFindingData[node.name];
-            if (data?.finding && initialResolved.includes(data.finding.id)) {
+            const list = Array.isArray(data?.findings) && data.findings.length > 0
+              ? data.findings
+              : (data?.finding ? [data.finding] : []);
+            const isAllResolved = list.length > 0 && list.every((f) => initialResolved.includes(f.id));
+            if (data?.hasFinding && isAllResolved) {
               return { ...node, hasFinding: false };
             }
           }
@@ -181,6 +186,7 @@ export default function FindingResultPage({
 
     setSelectedFile(defaultFile);
     setActiveTab('ALL');
+    setActiveFindingId(null);
     setShowNoAnalysisModal(false);
 
     const storageScope = `${currentProjectId}_${run.analysisId || activeAnalysisId || 'default'}`;
@@ -206,7 +212,11 @@ export default function FindingResultPage({
         nodes.map((node) => {
           if (!node.isDir) {
             const data = fileData[node.name];
-            if (data?.finding && loadedResolved.includes(data.finding.id)) {
+            const list = Array.isArray(data?.findings) && data.findings.length > 0
+              ? data.findings
+              : (data?.finding ? [data.finding] : []);
+            const isAllResolved = list.length > 0 && list.every((f) => loadedResolved.includes(f.id));
+            if (data?.hasFinding && isAllResolved) {
               return { ...node, hasFinding: false };
             }
           }
@@ -219,20 +229,39 @@ export default function FindingResultPage({
     }
   }, [currentProjectId, activeAnalysisId]);
 
-  // 상단 취약점 유형 탭 변경 핸들러 (해당 취약점 파일로 스마트 포커스)
+  // 상단 취약점 유형 탭 변경 핸들러 (해당 취약점 파일 및 취약점 항목으로 스마트 포커스)
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
     if (tabId !== 'ALL') {
+      // 1) 현재 파일에서 해당 타입 취약점 찾기
+      const currentItem = currentFileFindingData[selectedFile];
+      const currentFindings = Array.isArray(currentItem?.findings) && currentItem.findings.length > 0
+        ? currentItem.findings
+        : (currentItem?.finding ? [currentItem.finding] : []);
+
+      const matchedInCurrent = currentFindings.find(
+        (f) => f.vulnerabilityType === tabId && !resolvedFindingIds.includes(f.id)
+      );
+
+      if (matchedInCurrent) {
+        setActiveFindingId(matchedInCurrent.id);
+        return;
+      }
+
+      // 2) 다른 파일에서 해당 타입 취약점 찾기
       const matchedFile = Object.keys(currentFileFindingData).find((fileName) => {
         const item = currentFileFindingData[fileName];
-        return (
-          item.hasFinding &&
-          item.finding?.vulnerabilityType === tabId &&
-          !resolvedFindingIds.includes(item.finding?.id)
+        if (!item?.hasFinding) return false;
+        const list = Array.isArray(item.findings) && item.findings.length > 0
+          ? item.findings
+          : (item.finding ? [item.finding] : []);
+        return list.some(
+          (f) => f.vulnerabilityType === tabId && !resolvedFindingIds.includes(f.id)
         );
       });
       if (matchedFile && matchedFile !== selectedFile) {
         setSelectedFile(matchedFile);
+        setActiveFindingId(null);
       }
     }
   };
@@ -242,14 +271,34 @@ export default function FindingResultPage({
 
   // 현재 프로젝트 및 분석의 코드/취약점 정보를 최초 상태로 원상 복구하여 저장
   const handleResetAllToInitial = () => {
-    const { treeData: restoredTree, defaultFile } = resetProjectFindingData(currentProjectId);
+    const { treeData: restoredTree, defaultFile, fileFindingData: restoredData } = resetProjectFindingData(currentProjectId);
     setSavedFileCodes({});
     setResolvedFindingIds([]);
     setTreeData(restoredTree);
     setSelectedFile(defaultFile);
     setActiveTab('ALL');
+    setActiveFindingId(null);
+    setCodeScope('finding');
 
-    // 현재 분석 런의 localStorage 데이터 격리 초기화
+    // 1) React state인 currentAnalysisRun 불변 객체로 갱신하여 즉각적인 리렌더링 보장
+    if (currentAnalysisRun && restoredData) {
+      const nextAnalysisRun = {
+        ...currentAnalysisRun,
+        fileFindingData: JSON.parse(JSON.stringify(restoredData)),
+        treeData: JSON.parse(JSON.stringify(restoredTree)),
+      };
+      setCurrentAnalysisRun(nextAnalysisRun);
+    }
+
+    // 2) currentFileFindingData 맵 원본 복원
+    if (currentFileFindingData && restoredData) {
+      Object.keys(currentFileFindingData).forEach((key) => {
+        delete currentFileFindingData[key];
+      });
+      Object.assign(currentFileFindingData, JSON.parse(JSON.stringify(restoredData)));
+    }
+
+    // 3) 현재 분석 런의 localStorage 데이터 격리 초기화
     removeStorage(getStorageKey(STORAGE_PREFIX_RESOLVED, currentStorageScopeId));
     removeStorage(getStorageKey(STORAGE_PREFIX_SAVED_CODES, currentStorageScopeId));
     removeStorage(getStorageKey(STORAGE_PREFIX_TREE, currentStorageScopeId));
@@ -264,6 +313,10 @@ export default function FindingResultPage({
       removeStorage(STORAGE_PREFIX_TREE);
     }
 
+    // 4) analysisService의 분석 런 캐시도 초기화하여 원본과 일치시킴
+    removeStorage(`codeguard_analysis_run_${currentAnalysisRun?.analysisId || activeAnalysisId || 128}`);
+    removeStorage(`codeguard_latest_analysis_${currentProjectId}`);
+
     setShowResetToast(true);
     setTimeout(() => {
       setShowResetToast(false);
@@ -273,6 +326,7 @@ export default function FindingResultPage({
   // 파일 선택 처리
   const handleFileSelect = (fileName) => {
     setSelectedFile(fileName);
+    setActiveFindingId(null);
     const data = currentFileFindingData[fileName];
     if (!data || !data.hasFinding) {
       setUnAnalyzedFileName(fileName);
@@ -301,42 +355,237 @@ export default function FindingResultPage({
     diff: null,
   };
 
-  const isCurrentResolved = baseData.finding && resolvedFindingIds.includes(baseData.finding.id);
+  // 1) 현재 파일의 모든 취약점 목록 (baseData.vulnLineIndices 및 diff 상속 보장)
+  const allFileFindings = Array.isArray(baseData.findings) && baseData.findings.length > 0
+    ? baseData.findings.map((f) => ({
+        ...f,
+        vulnLineIndices:
+          (f.vulnLineIndices && f.vulnLineIndices.length > 0)
+            ? f.vulnLineIndices
+            : (f.line ? [f.line - 1] : baseData.vulnLineIndices || []),
+      }))
+    : (baseData.finding
+        ? [{
+            ...baseData.finding,
+            vulnLineIndices:
+              (baseData.finding.vulnLineIndices && baseData.finding.vulnLineIndices.length > 0)
+                ? baseData.finding.vulnLineIndices
+                : (baseData.vulnLineIndices && baseData.vulnLineIndices.length > 0)
+                ? baseData.vulnLineIndices
+                : (baseData.finding.line ? [baseData.finding.line - 1] : [3]),
+            diff: baseData.finding.diff || baseData.diff,
+          }]
+        : []);
+
+  // 2) 현재 선택된 유형 탭(activeTab)에 해당하는 취약점 목록
+  const visibleFindings = allFileFindings.filter(
+    (f) => activeTab === 'ALL' || f.vulnerabilityType === activeTab
+  );
+
+  // 3) 현재 포커스된 취약점 결정 (activeFindingId 우선, 미해결 취약점 우선, 없으면 첫 번째)
+  const selectedFinding =
+    (activeFindingId && allFileFindings.find((f) => f.id === activeFindingId)) ||
+    visibleFindings.find((f) => !resolvedFindingIds.includes(f.id)) ||
+    visibleFindings[0] ||
+    allFileFindings[0] ||
+    null;
+
+  const isCurrentResolved = selectedFinding && resolvedFindingIds.includes(selectedFinding.id);
 
   // 현재 표시할 코드 본문 (저장된 코드가 있으면 우선 사용)
   const currentCodeLines = savedFileCodes[selectedFile] || baseData.codeLines;
 
-  // 현재 파일의 취약점이 선택된 탭(activeTab)과 일치하는지 여부
-  const isTypeMatched =
-    activeTab === 'ALL' ||
-    (baseData.finding && baseData.finding.vulnerabilityType === activeTab);
+  /**
+   * 코드 내용과 취약점 diff/matchedCode를 기반으로 현재 코드 라인 상의 정확한 취약점 라인 인덱스(0-based)를 동적으로 탐색
+   * @param {Object} finding - 취약점 객체
+   * @param {string[]} codeLines - 현재 표시 중인 코드 라인 배열
+   * @param {number[]} resolvedIds - 해결 완료된 취약점 ID 목록
+   * @returns {number[]} 0-based 라인 인덱스 배열
+   */
+  const getDynamicFindingLines = (finding, codeLines, resolvedIds) => {
+    if (!finding || !Array.isArray(codeLines) || codeLines.length === 0) return [];
 
-  // 취약점이 존재하고 미해결이며, 현재 선택된 탭 유형과 일치할 때만 하이라이트 활성화
-  const hasActiveFinding = baseData.hasFinding && !isCurrentResolved && isTypeMatched;
-  const currentVulnLines = hasActiveFinding ? baseData.vulnLineIndices : [];
-  const currentTagLabel = hasActiveFinding
-    ? baseData.tagLabel
-    : isCurrentResolved
-    ? '✓ 보안 조치 완료 (안전한 코드로 수정됨)'
-    : '';
+    // 이미 해결된 취약점은 하이라이트할 라인이 없음 (빈 배열 반환하여 하이라이트 즉각 해제)
+    if (resolvedIds.includes(finding.id)) return [];
+
+    const diff = finding.diff || baseData.diff;
+    const originalVulnIndices = Array.isArray(finding.vulnLineIndices) && finding.vulnLineIndices.length > 0
+      ? finding.vulnLineIndices
+      : (finding.line ? [finding.line - 1] : []);
+
+    // 1) diff.beforeLines가 존재하는 경우: 실제 코드 본문에서 beforeLines 위치 동적 탐색
+    if (diff && Array.isArray(diff.beforeLines) && diff.beforeLines.length > 0) {
+      const firstBeforeLine = diff.beforeLines[0].trim();
+      let matchIdx = -1;
+
+      for (let i = 0; i < codeLines.length; i++) {
+        if (codeLines[i].trim() === firstBeforeLine) {
+          if (diff.beforeLines.length > 1 && i + 1 < codeLines.length) {
+            if (codeLines[i + 1].trim() === diff.beforeLines[1].trim()) {
+              matchIdx = i;
+              break;
+            }
+          } else {
+            matchIdx = i;
+            break;
+          }
+        }
+      }
+
+      if (matchIdx !== -1) {
+        // 원래 diff 시작 라인 대비 취약점 라인들의 상대적 오프셋 계산
+        const baseStartLineIdx = Math.max(0, (diff.startLine || finding.line || 1) - 1);
+        const relativeOffsets = originalVulnIndices.length > 0
+          ? originalVulnIndices.map((idx) => Math.max(0, idx - baseStartLineIdx))
+          : [0];
+
+        // 동적으로 이동된 위치에 상대 오프셋을 적용하여 현재 코드 라인 인덱스 생성
+        return relativeOffsets
+          .map((offset) => matchIdx + offset)
+          .filter((idx) => idx < codeLines.length);
+      } else {
+        // beforeLines가 코드에 존재하지 않는다면 이미 수정되어 해결된 것으로 간주
+        return [];
+      }
+    }
+
+    // 2) detectionSource.matchedCode가 존재하는 경우
+    if (finding.detectionSource?.matchedCode) {
+      const targetText = finding.detectionSource.matchedCode.trim();
+      const foundIdx = codeLines.findIndex((line) => line.trim() === targetText || line.includes(targetText));
+      if (foundIdx !== -1) {
+        return [foundIdx];
+      }
+    }
+
+    // 3) 폴백: 현재 코드가 기본 코드와 동일한 구조인 경우에만 원래의 vulnLineIndices 사용
+    if (originalVulnIndices.length > 0 && originalVulnIndices.every((idx) => idx < codeLines.length)) {
+      return originalVulnIndices;
+    }
+
+    return [];
+  };
+
+  // 4) 현재 표시할 취약 라인 목록 (라디오/토글: '이 취약점만' vs '전체 코드' 하이라이트 연동)
+  const allUnresolvedFindings = allFileFindings.filter((f) => !resolvedFindingIds.includes(f.id));
+  const activeUnresolvedFindings = visibleFindings.filter((f) => !resolvedFindingIds.includes(f.id));
+
+  // 현재 코드 본문 기준 동적 취약점 라인 계산 헬퍼
+  const getLinesForFinding = (f) => getDynamicFindingLines(f, currentCodeLines, resolvedFindingIds);
+
+  // 상단 탭이 '전체'(activeTab === 'ALL')이거나 우측 토글이 '전체 코드'(codeScope === 'full')인 경우:
+  // '이 취약점만'이 눌려 있어도 전체 취약점 라인들을 모두 하이라이트 상태로 유지!
+  const isAllMode = activeTab === 'ALL' || codeScope === 'full';
+  const currentVulnLines = isAllMode
+    ? allUnresolvedFindings.flatMap((f) => getLinesForFinding(f))
+    : activeUnresolvedFindings.flatMap((f) => getLinesForFinding(f));
+
+  // 각 취약점별 라인 블럭 목록 (2줄 이상인 취약점도 한 블럭으로 묶임)
+  const currentVulnBlocks = isAllMode
+    ? allUnresolvedFindings.map((f) => getLinesForFinding(f)).filter((lines) => lines.length > 0)
+    : activeUnresolvedFindings.map((f) => getLinesForFinding(f)).filter((lines) => lines.length > 0);
+
+  // 그 중 현재 선택된 취약점(첫 번째 또는 클릭하여 선택한 취약점)은 더 진한 하이라이트(activeVulnIndices)로 선택 상태 표시!
+  // 취약점이 2줄 이상인 경우(예: SQLI 라인 8-9, XSS 라인 26-27) 모든 해당 라인이 진하게 하이라이트됨!
+  // 단, 취약점이 이미 해결되었거나 currentVulnLines에 포함되어 있지 않은 경우 빈 배열로 처리하여 하이라이트 완전 해제!
+  const selectedFindingLines = selectedFinding && !isCurrentResolved
+    ? getLinesForFinding(selectedFinding)
+    : [];
+
+  const activeVulnIndices = selectedFindingLines.filter((idx) => currentVulnLines.includes(idx));
+  const activeVulnIndex = activeVulnIndices.length > 0 ? activeVulnIndices[0] : null;
+
+  // 5) 태그 라벨
+  const currentTagLabel =
+    codeScope === 'full'
+      ? (allUnresolvedFindings.length > 0
+          ? `${allUnresolvedFindings.length}개 보안 취약점 전체 탐지됨 (전체 코드 모드)`
+          : '✓ 모든 취약점 해결 완료')
+      : (selectedFinding
+          ? (isCurrentResolved
+              ? `✓ L${selectedFinding.line || ''} ${selectedFinding.title} 해결 완료`
+              : selectedFinding.tagLabel || `${selectedFinding.title} · ${selectedFinding.severityBadge}`)
+          : (allFileFindings.length > 0 && allFileFindings.every((f) => resolvedFindingIds.includes(f.id))
+              ? '✓ 모든 보안 조치 완료 (안전한 코드로 수정됨)'
+              : ''));
+
+  // 6) 활성 Diff 객체
+  const activeDiff = selectedFinding?.diff || baseData.diff;
+
+  // 7) hasActiveFinding (상세 패널 & diff 노출 조건)
+  const hasActiveFinding = Boolean(baseData.hasFinding && visibleFindings.length > 0 && selectedFinding);
 
   // 취약점 해결 클릭 핸들러 (after 코드 치환 및 프로젝트별 영구 저장)
+  // scope: 'full' (전체 해결) vs 'finding' (이 취약점만 해결)
   const handleResolve = async (findingId, scope = codeScope) => {
-    const diff = baseData.diff;
-    if (!diff) return;
-
     let patchedLines = [];
+    let resolvingIds = [];
 
-    if (scope === 'full' && diff.fullCleanCodeLines) {
-      // 1) 전체 코드 범위: import문 및 완전한 보안 패치가 적용된 완성형 코드로 파일 전체 치환
-      patchedLines = [...diff.fullCleanCodeLines];
+    if (scope === 'full') {
+      // 1) 전체 범위: 해당 파일 내 모든 미해결 취약점을 일괄 해결
+      resolvingIds = allFileFindings.map((f) => f.id);
+
+      // 전체 보안 패치가 완료된 코드가 정의되어 있으면 우선 적용
+      if (baseData.diff?.fullCleanCodeLines || selectedFinding?.diff?.fullCleanCodeLines) {
+        patchedLines = [...(baseData.diff?.fullCleanCodeLines || selectedFinding?.diff?.fullCleanCodeLines)];
+      } else {
+        // fullCleanCodeLines가 없는 경우 각 취약점의 diff를 역순(startLine 내림차순)으로 누적 치환
+        let accumulated = [...currentCodeLines];
+        const sortedFindings = [...allFileFindings]
+          .filter((f) => (f.diff || baseData.diff)?.startLine)
+          .sort((a, b) => ((b.diff || baseData.diff).startLine || 0) - ((a.diff || baseData.diff).startLine || 0));
+
+        sortedFindings.forEach((f) => {
+          const d = f.diff || baseData.diff;
+          if (d && d.afterLines) {
+            const sIdx = Math.max(0, (d.startLine || 1) - 1);
+            const delCount = d.beforeLines ? d.beforeLines.length : 1;
+            accumulated.splice(sIdx, delCount, ...d.afterLines);
+          }
+        });
+        patchedLines = accumulated;
+      }
     } else {
-      // 2) 이 취약점만 범위: 취약 구간(startLine)만 afterLines로 정밀 치환
-      const original = [...currentCodeLines];
-      const startIdx = Math.max(0, diff.startLine - 1);
-      const deleteCount = diff.beforeLines ? diff.beforeLines.length : 1;
-      original.splice(startIdx, deleteCount, ...diff.afterLines);
-      patchedLines = original;
+      // 2) 이 취약점만 범위: 현재 선택된(진하게 강조된) 취약점 1건만 단독 정밀 치환
+      resolvingIds = [findingId];
+      const targetFinding = allFileFindings.find((f) => f.id === findingId) || selectedFinding;
+      const diff = targetFinding?.diff || baseData.diff;
+      if (diff && diff.afterLines) {
+        const original = [...currentCodeLines];
+        let startIdx = -1;
+        if (diff.beforeLines && diff.beforeLines.length > 0) {
+          const targetLineText = diff.beforeLines[0].trim();
+          for (let i = 0; i < original.length; i++) {
+            if (original[i].trim() === targetLineText) {
+              if (diff.beforeLines.length > 1 && i + 1 < original.length) {
+                if (original[i + 1].trim() === diff.beforeLines[1].trim()) {
+                  startIdx = i;
+                  break;
+                }
+              } else {
+                startIdx = i;
+                break;
+              }
+            }
+          }
+        }
+        if (startIdx === -1) {
+          startIdx = Math.max(0, (diff.startLine || 1) - 1);
+        }
+        const deleteCount = diff.beforeLines ? diff.beforeLines.length : 1;
+        original.splice(startIdx, deleteCount, ...diff.afterLines);
+        patchedLines = original;
+      } else {
+        patchedLines = [...currentCodeLines];
+      }
+
+      // 해결 후 남아있는 다음 미해결 취약점으로 선택 자동 이동
+      const remainingUnresolved = allFileFindings.filter(
+        (f) => f.id !== findingId && !resolvedFindingIds.includes(f.id)
+      );
+      if (remainingUnresolved.length > 0) {
+        setActiveFindingId(remainingUnresolved[0].id);
+      }
     }
 
     // 1) 파일에 저장 (메모리 상태, 원본 객체, localStorage 영구 보존)
@@ -349,32 +598,37 @@ export default function FindingResultPage({
     saveStorage(getStorageKey(STORAGE_PREFIX_SAVED_CODES, currentStorageScopeId), nextSavedCodes);
 
     // 2) 해결 상태 등록 (메모리 상태 & localStorage 영구 보존)
-    const nextResolvedIds = [...new Set([...resolvedFindingIds, findingId])];
+    const nextResolvedIds = [...new Set([...resolvedFindingIds, ...resolvingIds])];
     setResolvedFindingIds(nextResolvedIds);
     saveStorage(getStorageKey(STORAGE_PREFIX_RESOLVED, currentStorageScopeId), nextResolvedIds);
 
-    // 3) 파일 트리에서 해당 파일의 취약점 인디케이터(●) 해결 처리 및 저장
-    const updateNodes = (nodes) =>
-      nodes.map((node) => {
-        if (!node.isDir && node.name === selectedFile) {
-          return { ...node, hasFinding: false };
-        }
-        if (node.children) {
-          return { ...node, children: updateNodes(node.children) };
-        }
-        return node;
-      });
-    const nextTree = updateNodes(treeData);
-    setTreeData(nextTree);
-    saveStorage(getStorageKey(STORAGE_PREFIX_TREE, currentStorageScopeId), nextTree);
+    // 3) 파일 트리에서 해당 파일의 모든 취약점이 해결되었는지 확인
+    const isFileFullyResolved = allFileFindings.every((f) => nextResolvedIds.includes(f.id));
+    if (isFileFullyResolved) {
+      const updateNodes = (nodes) =>
+        nodes.map((node) => {
+          if (!node.isDir && node.name === selectedFile) {
+            return { ...node, hasFinding: false };
+          }
+          if (node.children) {
+            return { ...node, children: updateNodes(node.children) };
+          }
+          return node;
+        });
+      const nextTree = updateNodes(treeData);
+      setTreeData(nextTree);
+      saveStorage(getStorageKey(STORAGE_PREFIX_TREE, currentStorageScopeId), nextTree);
+    }
 
     // 4) 백엔드 연동 규격 API 및 분석 런 동기화
-    await updateFindingStatusOnAnalysis({
-      projectId: currentProjectId,
-      analysisId: currentAnalysisRun?.analysisId,
-      findingId,
-      status: 'RESOLVED',
-    });
+    for (const rId of resolvingIds) {
+      await updateFindingStatusOnAnalysis({
+        projectId: currentProjectId,
+        analysisId: currentAnalysisRun?.analysisId,
+        findingId: rId,
+        status: 'RESOLVED',
+      });
+    }
   };
 
   // 실제 등록된 취약점 기반 동적 카운트 계산
@@ -389,9 +643,9 @@ export default function FindingResultPage({
   const headerSubtitle = `${getProjectFilePath(currentProjectId, selectedFile)} ${analysisMetaBadge}`;
 
   // 현재 취약점 상세 객체 (해결 상태 동기화)
-  const currentFindingObj = baseData.finding
+  const currentFindingObj = selectedFinding
     ? {
-        ...baseData.finding,
+        ...selectedFinding,
         status: isCurrentResolved ? 'RESOLVED' : 'OPEN',
       }
     : null;
@@ -474,13 +728,12 @@ export default function FindingResultPage({
             onTabChange={handleTabChange}
             tabs={dynamicTabs}
           />
-          <SeveritySummary totals={dynamicTotals} />
         </div>
 
         {/* 상단 메인 그리드 */}
         <div
           className={`result-grid-3col ${
-            !baseData.hasFinding || !isTypeMatched ? 'no-finding' : ''
+            !hasActiveFinding ? 'no-finding' : ''
           } ${isTreeCollapsed ? 'tree-collapsed' : ''}`}
         >
           {/* 좌측: 파일 트리 (범위 상관없이 취약점이 있는 모든 파일에 빨간 점 표시) */}
@@ -500,14 +753,27 @@ export default function FindingResultPage({
             fileName={selectedFile}
             codeLines={currentCodeLines}
             vulnLineIndices={currentVulnLines}
+            vulnBlocks={currentVulnBlocks}
+            activeVulnIndex={activeVulnIndex}
+            activeVulnIndices={activeVulnIndices}
+            onLineClick={(lineIdx) => {
+              const matched = allFileFindings.find((f) => {
+                const lines = getLinesForFinding(f);
+                return lines.includes(lineIdx);
+              });
+              if (matched) {
+                setActiveFindingId(matched.id);
+              }
+            }}
             tagLabel={currentTagLabel}
             className="editor result-editor"
           />
 
           {/* 우측: 취약점 상세 정보 & AI 분석 패널 */}
-          {baseData.hasFinding && isTypeMatched && (
+          {hasActiveFinding && (
             <FindingDetailPanel
               finding={currentFindingObj}
+              scope={codeScope}
               onScopeChange={setCodeScope}
               onResolve={(id, scope) => handleResolve(id, scope)}
             />
@@ -515,12 +781,12 @@ export default function FindingResultPage({
         </div>
 
         {/* 하단: BEFORE / AFTER Diff 비교 패널 */}
-        {baseData.hasFinding && isTypeMatched && baseData.diff && (
+        {hasActiveFinding && activeDiff && (
           <CodeDiffPanel
             fileName={selectedFile}
-            startLine={baseData.diff.startLine}
-            beforeLines={baseData.diff.beforeLines}
-            afterLines={baseData.diff.afterLines}
+            startLine={activeDiff.startLine}
+            beforeLines={activeDiff.beforeLines}
+            afterLines={activeDiff.afterLines}
           />
         )}
       </div>
