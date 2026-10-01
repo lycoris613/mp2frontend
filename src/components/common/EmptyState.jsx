@@ -10,7 +10,7 @@ export default function EmptyState({
   return (
     <div className="empty-state" style={{ padding: '40px', textAlign: 'center' }}>
       <p style={{ fontWeight: 'bold', marginBottom: '6px' }}>{title}</p>
-      <p style={{ color: '#888', fontSize: '13px', marginBottom: '16px' }}>
+      <p style={{ color: 'var(--text-3)', fontSize: '13px', marginBottom: '16px' }}>
         {description}
       </p>
       {actionLabel && (

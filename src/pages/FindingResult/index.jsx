@@ -393,8 +393,8 @@ export default function FindingResultPage({
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
-                borderColor: '#f59e0b',
-                color: '#f59e0b',
+                borderColor: 'var(--high)',
+                color: 'var(--high)',
                 fontWeight: 600,
                 fontSize: '12px',
                 padding: '6px 12px',
@@ -523,9 +523,9 @@ export default function FindingResultPage({
             position: 'fixed',
             bottom: '28px',
             right: '28px',
-            background: '#0f172a',
-            color: '#f8fafc',
-            border: '1px solid #38bdf8',
+            background: 'var(--bg-2)',
+            color: 'var(--text-1)',
+            border: '1px solid var(--accent)',
             borderRadius: '8px',
             padding: '14px 20px',
             boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
@@ -536,9 +536,9 @@ export default function FindingResultPage({
             zIndex: 9999,
           }}
         >
-          <CheckCircle size={18} color="#38bdf8" />
+          <CheckCircle size={18} color="var(--accent)" />
           <div>
-            <strong style={{ display: 'block', color: '#38bdf8', marginBottom: '2px' }}>원상 복구 완료</strong>
+            <strong style={{ display: 'block', color: 'var(--accent)', marginBottom: '2px' }}>원상 복구 완료</strong>
             <span>모든 파일의 소스코드와 취약점이 초기 테스트 상태로 복구되어 저장되었습니다.</span>
           </div>
         </div>
