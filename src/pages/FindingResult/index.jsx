@@ -670,8 +670,8 @@ export default function FindingResultPage({
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
-                borderColor: '#f59e0b',
-                color: '#f59e0b',
+                borderColor: 'var(--high)',
+                color: 'var(--high)',
                 fontWeight: 600,
                 fontSize: '12px',
                 padding: '6px 12px',
@@ -699,17 +699,17 @@ export default function FindingResultPage({
             alignItems: 'center',
             justifyContent: 'space-between',
             fontSize: '12px',
-            color: '#94a3b8',
+            color: 'var(--text-2)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ShieldAlert size={14} color="#38bdf8" />
+            <ShieldAlert size={14} color="var(--accent)" />
             <span>
-              최근 실행된 분석: <strong style={{ color: '#38bdf8' }}>{analysisTitleText}</strong> (ID: #{currentAnalysisRun.analysisId})
+              최근 실행된 분석: <strong style={{ color: 'var(--accent)' }}>{analysisTitleText}</strong> (ID: #{currentAnalysisRun.analysisId})
             </span>
-            <span style={{ color: '#64748b' }}>|</span>
+            <span style={{ color: 'var(--text-3)' }}>|</span>
             <span>
-              분석 범위: <strong style={{ color: '#f1f5f9' }}>{currentAnalysisRun.scope}</strong>
+              분석 범위: <strong style={{ color: 'var(--text-1)' }}>{currentAnalysisRun.scope}</strong>
               {currentAnalysisRun.scope === '현재 파일' && ` (${currentAnalysisRun.selectedFile})`}
             </span>
           </div>
@@ -846,9 +846,9 @@ export default function FindingResultPage({
             position: 'fixed',
             bottom: '28px',
             right: '28px',
-            background: '#0f172a',
-            color: '#f8fafc',
-            border: '1px solid #38bdf8',
+            background: 'var(--bg-2)',
+            color: 'var(--text-1)',
+            border: '1px solid var(--accent)',
             borderRadius: '8px',
             padding: '14px 20px',
             boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
@@ -859,9 +859,9 @@ export default function FindingResultPage({
             zIndex: 9999,
           }}
         >
-          <CheckCircle size={18} color="#38bdf8" />
+          <CheckCircle size={18} color="var(--accent)" />
           <div>
-            <strong style={{ display: 'block', color: '#38bdf8', marginBottom: '2px' }}>원상 복구 완료</strong>
+            <strong style={{ display: 'block', color: 'var(--accent)', marginBottom: '2px' }}>원상 복구 완료</strong>
             <span>{currentProjectId} 프로젝트의 모든 파일 소스코드와 취약점이 초기 상태로 복구되어 저장되었습니다.</span>
           </div>
         </div>
