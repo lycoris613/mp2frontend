@@ -88,7 +88,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
       <nav>
         {navItem('/', Home, '홈')}
         {navItem('/analysis/new', ScanSearch, '코드 분석')}
-        {navItem('/analyses', FileSearch2, '분석 결과')}
+        {navItem('/analyses/list', FileSearch2, '분석 결과')}
       </nav>
 
       <div className="side-search">

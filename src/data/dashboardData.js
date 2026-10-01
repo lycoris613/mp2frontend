@@ -61,3 +61,29 @@ export const recentProjects = [
 ];
 
 export const trendChartBars = [42, 34, 48, 39, 43, 37, 33, 29, 24, 20, 18, 14];
+
+// 분석 결과 목록(AnalysisListPage, SCR-004)용 Mock 데이터
+// dashboardApi.getAnalyses()가 참조한다 (원래 import가 존재하지 않는 recentAnalyses를 가리키고 있어 추가함)
+export const recentAnalyses = [
+  {
+    id: 1,
+    project: 'payments-api',
+    vulnerability: 'SQL 삽입 · 하드코딩된 비밀정보 · XSS 3건 탐지',
+    severity: 'CRITICAL',
+    date: '2026-10-01T14:32:18',
+  },
+  {
+    id: 2,
+    project: 'auth-service',
+    vulnerability: '하드코딩된 JWT 서명 비밀키 탐지',
+    severity: 'HIGH',
+    date: '2026-09-30T10:05:44',
+  },
+  {
+    id: 3,
+    project: 'admin-console',
+    vulnerability: '취약점 없음',
+    severity: 'LOW',
+    date: '2026-09-29T09:10:00',
+  },
+];
