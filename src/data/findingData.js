@@ -84,7 +84,7 @@ export const PROJECTS_DATA = {
           '',
           'export default router;',
         ],
-        vulnLineIndices: [7, 8, 14, 25, 26], // 라인 8-9 (SQLI 2줄), 라인 15 (Secret 1줄), 라인 26-27 (XSS 2줄)
+        vulnLineIndices: [7, 8, 9, 14, 25, 26], // 라인 8-10 (SQLI 3줄), 라인 15 (Secret 1줄), 라인 26-27 (XSS 2줄)
         tagLabel: '3개 보안 취약점 탐지됨 (SQLI · Secret · XSS)',
         findings: [
           {
@@ -97,8 +97,8 @@ export const PROJECTS_DATA = {
             confidence: '97%',
             status: 'OPEN',
             line: 8,
-            vulnLineIndices: [7, 8],
-            tagLabel: 'SQL 삽입 취약점 · 치명적 (라인 8-9)',
+            vulnLineIndices: [7, 8, 9],
+            tagLabel: 'SQL 삽입 취약점 · 치명적 (라인 8-10)',
             detectionSource: {
               title: '탐지 근거 · 룰 기반',
               ruleId: 'SQLI-001',
@@ -201,8 +201,8 @@ export const PROJECTS_DATA = {
           confidence: '97%',
           status: 'OPEN',
           line: 8,
-          vulnLineIndices: [7, 8],
-          tagLabel: 'SQL 삽입 취약점 · 치명적 (라인 8-9)',
+          vulnLineIndices: [7, 8, 9],
+          tagLabel: 'SQL 삽입 취약점 · 치명적 (라인 8-10)',
           detectionSource: {
             title: '탐지 근거 · 룰 기반',
             ruleId: 'SQLI-001',

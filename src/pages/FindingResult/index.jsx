@@ -486,7 +486,7 @@ export default function FindingResultPage({
     : activeUnresolvedFindings.map((f) => getLinesForFinding(f)).filter((lines) => lines.length > 0);
 
   // 그 중 현재 선택된 취약점(첫 번째 또는 클릭하여 선택한 취약점)은 더 진한 하이라이트(activeVulnIndices)로 선택 상태 표시!
-  // 취약점이 2줄 이상인 경우(예: SQLI 라인 8-9, XSS 라인 26-27) 모든 해당 라인이 진하게 하이라이트됨!
+  // 취약점이 2줄 이상인 경우(예: SQLI 라인 8-10 3줄, XSS 라인 26-27 2줄) 모든 해당 라인이 단일 블럭으로 진하게 하이라이트됨!
   // 단, 취약점이 이미 해결되었거나 currentVulnLines에 포함되어 있지 않은 경우 빈 배열로 처리하여 하이라이트 완전 해제!
   const selectedFindingLines = selectedFinding && !isCurrentResolved
     ? getLinesForFinding(selectedFinding)
