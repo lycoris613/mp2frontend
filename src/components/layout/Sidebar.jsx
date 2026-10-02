@@ -9,8 +9,6 @@ import {
   LogIn,
   LogOut,
 } from 'lucide-react';
-import { PAGES } from '../../constants/navigation';
-
 export default function Sidebar({ currentUser = null, onLogout }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -22,8 +20,11 @@ export default function Sidebar({ currentUser = null, onLogout }) {
 
   // 상단 일반 메뉴 (홈, 코드 분석, 분석 결과)
   const navItem = (path, Icon, label) => {
-    // 프로젝트가 선택되지 않았고, 경로가 일치할 때만 active
-    const isActive = currentPath === path && !currentProject;
+    // 프로젝트가 선택되지 않았고 경로가 일치할 때, 또는
+    // 프로젝트 선택 중에는 '코드 분석' 메뉴를 함께 하이라이트한다
+    const isActive =
+      (currentPath === path && !currentProject) ||
+      (currentProject && path === '/analysis/new');
 
     return (
       <button
@@ -77,7 +78,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
       <nav>
         {navItem('/', Home, '홈')}
         {navItem('/analysis/new', ScanSearch, '코드 분석')}
-        {navItem('/analyses', FileSearch2, '분석 결과')}
+        {navItem('/analyses/list', FileSearch2, '분석 결과')}
       </nav>
 
       <div className="side-search">

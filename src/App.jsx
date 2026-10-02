@@ -4,6 +4,7 @@ import ProtectedLayout from './layouts/ProtectedLayout';
 import HomePage from './pages/Home';
 import CodeAnalysisPage from './pages/CodeAnalysis';
 import FindingResultPage from './pages/FindingResult';
+import AnalysisListPage from './pages/AnalysisList';
 import AuthPage from './pages/Auth';
 import { getCurrentSessionUser, clearSessionUser } from './services/authService';
 
@@ -51,6 +52,9 @@ function AppContent() {
 
         {/* 분석 결과 목록 및 프로젝트별 결과 (?project=...) */}
         <Route path="/analyses" element={<FindingResultPage currentUser={currentUser} />} />
+
+        {/* 전체 분석 이력 목록 (SCR-004, 유지 여부 미정 — UI-12) */}
+        <Route path="/analyses/list" element={<AnalysisListPage currentUser={currentUser} />} />
 
         {/* 경로 파라미터 방식 지원 (/results/:projectId) */}
         <Route path="/results/:projectId" element={<FindingResultPage currentUser={currentUser} />} />

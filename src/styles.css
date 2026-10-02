@@ -777,18 +777,110 @@ button {
   color:var(--text-1);
 }
 
-/* 취약 라인 테두리 박스 하이라이트 (라인 6) */
+/* 취약 라인 테두리 박스 하이라이트 (일반 탐지 라인) */
 .code-line.vuln-line-highlight {
-  border:1px solid var(--critical);
-  background:var(--critical-bg);
-  border-radius:4px;
-  margin:1px 10px;
-  padding:1px 2px;
+  border: 1px solid var(--critical);
+  background: var(--critical-bg);
+  margin: 1px 10px;
+  padding: 1px 2px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+/* 단일 라인 취약점 블럭 */
+.code-line.vuln-line-highlight.vuln-block-single {
+  border-radius: 4px;
+  margin: 1px 10px;
+}
+
+/* 다중 라인 취약점: 하나의 연결된 단일 블럭으로 표시 */
+.code-line.vuln-line-highlight.vuln-block-start {
+  border-bottom: none !important;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  margin-top: 1px;
+  margin-bottom: 0 !important;
+}
+
+.code-line.vuln-line-highlight.vuln-block-middle {
+  border-top: none !important;
+  border-bottom: none !important;
+  border-radius: 0;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.code-line.vuln-line-highlight.vuln-block-end {
+  border-top: none !important;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+  margin-top: 0 !important;
+  margin-bottom: 1px;
+}
+
+.code-line.vuln-line-highlight:hover,
+.code-line.vuln-line-highlight.vuln-block-hovered {
+  background: rgba(248, 113, 113, 0.22);
+  border-color: var(--critical);
+}
+
+/* 현재 포커스/선택된 취약 라인 (더 진한 단일 블럭 하이라이트) */
+.code-line.vuln-active-highlight {
+  border: 2px solid var(--critical) !important;
+  background: rgba(248, 113, 113, 0.3) !important;
+  position: relative;
+  z-index: 2;
+}
+
+.code-line.vuln-active-highlight.vuln-block-single {
+  border-radius: 4px !important;
+  margin: 1px 10px !important;
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.4) !important;
+}
+
+.code-line.vuln-active-highlight.vuln-block-start {
+  border-bottom: none !important;
+  border-top-left-radius: 4px !important;
+  border-top-right-radius: 4px !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  margin-top: 1px !important;
+  margin-bottom: 0 !important;
+  box-shadow: -2px 0 0 0 rgba(248, 113, 113, 0.4), 2px 0 0 0 rgba(248, 113, 113, 0.4), 0 -2px 0 0 rgba(248, 113, 113, 0.4) !important;
+}
+
+.code-line.vuln-active-highlight.vuln-block-middle {
+  border-top: none !important;
+  border-bottom: none !important;
+  border-radius: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  box-shadow: -2px 0 0 0 rgba(248, 113, 113, 0.4), 2px 0 0 0 rgba(248, 113, 113, 0.4) !important;
+}
+
+.code-line.vuln-active-highlight.vuln-block-end {
+  border-top: none !important;
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+  border-bottom-left-radius: 4px !important;
+  border-bottom-right-radius: 4px !important;
+  margin-top: 0 !important;
+  margin-bottom: 1px !important;
+  box-shadow: -2px 0 0 0 rgba(248, 113, 113, 0.4), 2px 0 0 0 rgba(248, 113, 113, 0.4), 0 2px 0 0 rgba(248, 113, 113, 0.4) !important;
 }
 
 .code-line.vuln-line-highlight code {
-  color:var(--critical);
-  font-weight:600;
+  color: var(--critical);
+  font-weight: 600;
+}
+
+.code-line.vuln-active-highlight code {
+  color: #fecaca !important;
+  font-weight: 700 !important;
 }
 
 .code-tag-row {
@@ -2163,4 +2255,164 @@ button {
   cursor: pointer;
   padding: 0;
   text-decoration: underline;
+}
+
+/* =========================================================
+   분석 결과 목록 (AnalysisListPage, SCR-004)
+   ========================================================= */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.section-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.section-header-tag {
+  font-size: 13px;
+  color: var(--accent);
+  margin-left: 8px;
+  font-weight: 600;
+}
+
+.sub-text {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.list-toolbar {
+  display: flex;
+  gap: 8px;
+}
+
+.list-search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: var(--bg-2);
+  color: var(--text-3);
+}
+
+.list-search-box input {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-1);
+  font-size: 11px;
+}
+
+.list-filter-select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 11px;
+  background: var(--bg-2);
+  color: var(--text-1);
+  cursor: pointer;
+}
+
+.analysis-list-container {
+  margin-top: 16px;
+}
+
+.list-error-banner {
+  padding: 18px;
+  background: var(--critical-bg);
+  border: 1px solid var(--critical);
+  border-radius: 8px;
+  color: var(--critical);
+}
+
+.list-error-banner-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.list-error-banner p {
+  font-size: 11.5px;
+  margin: 0 0 10px;
+}
+
+.list-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--critical);
+  color: var(--bg-0);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+}
+
+.list-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.list-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.list-row:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-2);
+}
+
+.list-row-title {
+  font-size: 13px;
+  color: var(--text-1);
+}
+
+.list-row-meta {
+  margin-left: 10px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.list-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.list-delete-btn {
+  border: none;
+  background: none;
+  color: var(--text-3);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+}
+
+.list-delete-btn:hover {
+  color: var(--critical);
+}
+
+.risk-badge.safe {
+  background: var(--low-bg);
+  color: var(--low);
 }
