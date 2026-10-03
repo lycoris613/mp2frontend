@@ -204,11 +204,17 @@ export default function FindingResultPage({
         const restoredFindings =
           loadStorageWithFallback('codeguard_restored_findings', storageScope, null);
 
+        // 이 분석(스코프)에서 원상 복구가 수행된 적이 있으면, 저장된 해결 ID(loadedResolved)는 복구된 취약점 ID 기준이므로
+        // 재진입 시 백엔드 취약점으로 되돌리지 않고 복구 스냅샷을 계속 기준 데이터로 사용해야 ID가 일치한다.
+        // (그렇지 않으면 해결한 취약점이 미해결로 판정되어 빨간 점이 다시 표시됨)
+        const hasScopedRestore =
+          loadStorage(getStorageKey('codeguard_restored_findings', storageScope), null) !== null;
+
         if (restoredFindings) {
           Object.keys(restoredFindings).forEach((fileName) => {
             if (!fileData[fileName]) {
               fileData[fileName] = JSON.parse(JSON.stringify(restoredFindings[fileName]));
-            } else if (isRestored || !fileData[fileName].hasFinding || !fileData[fileName].findings?.length) {
+            } else if (isRestored || hasScopedRestore || !fileData[fileName].hasFinding || !fileData[fileName].findings?.length) {
               fileData[fileName].hasFinding = restoredFindings[fileName].hasFinding;
               fileData[fileName].findings = JSON.parse(JSON.stringify(restoredFindings[fileName].findings || []));
               fileData[fileName].finding = restoredFindings[fileName].finding
@@ -868,6 +874,8 @@ export default function FindingResultPage({
     });
     saveStorage(STORAGE_PREFIX_SAVED_CODES, nextSavedCodes);
     saveStorage(STORAGE_PREFIX_RESOLVED, nextResolvedIds);
+    // 레거시 전역 플래그도 해제 (남아 있으면 다른 스코프 로드 시 복구 상태로 오인됨)
+    saveStorage('codeguard_is_restored', false);
     // 3-1) 로컬 컴퓨터(C:\Users\user\Documents\code\{targetProject}\{relativePath})의 실제 파일에 수정된 코드 즉시 저장 반영!
     const targetPaths = PROJECTS_DATA[normalizeProjectId(targetProject)]?.filePaths || {};
     const targetRelPath = targetPaths[selectedFile] || selectedFile;

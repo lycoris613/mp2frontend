@@ -67,6 +67,32 @@ button {
   font-size:14px
 }
 
+/* 로고 (투명 배경 PNG) — 하늘색 네온 글로우: 알파 윤곽을 따라 번지므로 다크 배경에서도 남색 방패가 또렷함 */
+.brand-logo {
+  height:30px;
+  width:auto;
+  object-fit:contain;
+  flex:none;
+  filter:
+    drop-shadow(0 0 1.5px #7dd3fc)
+    drop-shadow(0 0 6px rgba(56,189,248,.75))
+    drop-shadow(0 0 14px rgba(56,189,248,.35));
+  transition:filter .25s ease
+}
+
+.brand:hover .brand-logo {
+  filter:
+    drop-shadow(0 0 2px #bae6fd)
+    drop-shadow(0 0 9px rgba(56,189,248,.95))
+    drop-shadow(0 0 20px rgba(56,189,248,.55))
+}
+
+.brand-logo.large {
+  display:inline-block;
+  height:64px;
+  margin-bottom:12px
+}
+
 .brand-mark {
   width:18px;
   height:18px;

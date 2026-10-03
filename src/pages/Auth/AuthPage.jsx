@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, UserPlus, LogIn, AlertCircle, CheckCircle } from 'lucide-react';
 import { PAGES } from '../../constants/navigation';
 import { authenticateUser, registerUser } from '../../services/authService';
+import logoUrl from '../../assets/logo.png';
 
 /**
  * [SCR-004] 로그인 및 회원가입 화면
@@ -93,7 +94,7 @@ export default function AuthPage({ onLoginSuccess, setPage }) {
       <div className="auth-card">
         {/* 상단 브랜딩 */}
         <div className="auth-brand">
-          <span className="brand-mark large"></span>
+          <img className="brand-logo large" src={logoUrl} alt="CodeGuard AI" />
           <h2>CodeGuard AI</h2>
           <p>규칙 기반 보안 분석 & LLM 코드 리뷰 플랫폼</p>
         </div>
