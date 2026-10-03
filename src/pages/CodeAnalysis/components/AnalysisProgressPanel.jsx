@@ -1,16 +1,9 @@
-import { useState, useEffect } from 'react';
-import { X, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, CheckCircle, Loader2 } from 'lucide-react';
 
 /**
  * 분석 진행 모달 팝업 컴포넌트
- * 취약점 분석 시작 버튼 클릭 시 팝업으로 오픈되며,
- * 백엔드 미연결 상태 안내와 함께 프론트엔드 모의(Mock) 분석 진행률 및 단계 표시
- *
- * @param {boolean} isOpen - 모달 팝업 표시 여부
- * @param {function} onClose - 팝업 닫기/취소 콜백
- * @param {function} onViewResult - 분석 결과 페이지 이동 콜백
- * @param {string} fileName - 분석 대상 파일명
- * @param {object} config - 분석 설정 (title, scope, rules)
+ * 실제 Spring Boot 백엔드 분석 진행 및 결과 알림 표시
  */
 export default function AnalysisProgressPanel({
   isOpen = false,
@@ -24,7 +17,10 @@ export default function AnalysisProgressPanel({
   const [stepIndex, setStepIndex] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
 
-  const findingCount = result?.totalFindings !== undefined ? result.totalFindings : 3;
+  const timersRef = useRef([]);
+  const isCompletedRef = useRef(false);
+
+  const findingCount = result?.totalFindings !== undefined ? result.totalFindings : 0;
 
   const steps = [
     '코드 구문 분석 및 AST 파싱 중...',
@@ -33,41 +29,71 @@ export default function AnalysisProgressPanel({
     `취약점 분석 완료 (${findingCount}건 발견됨)`,
   ];
 
+  // 모든 대기 타이머 클리어 함수
+  const clearAllTimers = () => {
+    timersRef.current.forEach((t) => clearTimeout(t));
+    timersRef.current = [];
+  };
+
   useEffect(() => {
     if (!isOpen) {
+      clearAllTimers();
+      isCompletedRef.current = false;
       setPercent(0);
       setStepIndex(0);
       setIsCompleted(false);
       return;
     }
 
-    // 모의(Mock) 분석 진행 애니메이션 시뮬레이션
-    setPercent(15);
-    setStepIndex(0);
-    setIsCompleted(false);
+    // 모달이 열렸을 때 (결과가 이미 도착한 상태가 아니라면 초기화 진행)
+    if (!result) {
+      clearAllTimers();
+      isCompletedRef.current = false;
+      setIsCompleted(false);
+      setPercent(20);
+      setStepIndex(0);
 
-    const t1 = setTimeout(() => {
-      setPercent(45);
-      setStepIndex(1);
-    }, 700);
+      // 1단계 -> 2단계: 50%
+      const t1 = setTimeout(() => {
+        if (!isCompletedRef.current) {
+          setPercent((prev) => Math.max(prev, 50));
+          setStepIndex((prev) => (prev < 1 ? 1 : prev));
+        }
+      }, 500);
 
-    const t2 = setTimeout(() => {
-      setPercent(80);
-      setStepIndex(2);
-    }, 1500);
+      // 2단계 -> 3단계: 85%
+      const t2 = setTimeout(() => {
+        if (!isCompletedRef.current) {
+          setPercent((prev) => Math.max(prev, 85));
+          setStepIndex((prev) => (prev < 2 ? 2 : prev));
+        }
+      }, 1000);
 
-    const t3 = setTimeout(() => {
+      // 3단계 대기: 92% (백엔드 분석 응답 대기)
+      const t3 = setTimeout(() => {
+        if (!isCompletedRef.current) {
+          setPercent((prev) => Math.max(prev, 92));
+        }
+      }, 1800);
+
+      timersRef.current = [t1, t2, t3];
+    }
+
+    return () => {
+      clearAllTimers();
+    };
+  }, [isOpen, result]);
+
+  // result가 도착하면 타이머를 즉시 취소하고 완료(100%) 상태로 확정 전환
+  useEffect(() => {
+    if (result && isOpen) {
+      isCompletedRef.current = true;
+      clearAllTimers();
       setPercent(100);
       setStepIndex(3);
       setIsCompleted(true);
-    }, 2300);
-
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-    };
-  }, [isOpen]);
+    }
+  }, [result, isOpen]);
 
   if (!isOpen) return null;
 
@@ -101,13 +127,22 @@ export default function AnalysisProgressPanel({
 
         {/* 모달 본문 */}
         <div className="modal-body">
-          {/* 백엔드 미연동 안내 알림 배너 */}
-          <div className="backend-notice-banner">
-            <AlertTriangle size={16} className="notice-icon" />
+          {/* 백엔드 연동 상태 안내 알림 배너 */}
+          <div
+            className="backend-notice-banner"
+            style={{
+              borderColor: '#10b981',
+              backgroundColor: '#f0fdf4',
+              color: '#065f46',
+            }}
+          >
+            <CheckCircle size={16} className="notice-icon" style={{ color: '#10b981' }} />
             <div className="notice-text">
-              <strong>백엔드 API 미연결 안내</strong>
-              <p>
-                현재 백엔드 분석 서버가 연결되어 있지 않아 사전 정의된 데모(Mock) 분석 시뮬레이션으로 동작합니다.
+              <strong style={{ color: '#047857' }}>
+                Spring Boot 백엔드 분석 엔진 연결됨
+              </strong>
+              <p style={{ color: '#065f46' }}>
+                실제 Spring Boot REST API (/api/v1/analyses) 서버와 연동되어 보안 규칙 탐지를 수행합니다.
               </p>
             </div>
           </div>

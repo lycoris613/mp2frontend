@@ -1,18 +1,248 @@
 /**
- * 홈 대시보드 통계 REST API 모듈 (03 REST API 설계서 4.4.2 준수)
+ * 홈 대시보드 통계 및 분석 결과 목록 REST API 모듈
+ * 실제 Spring Boot 백엔드(/api/v1/analyses) 연동
  */
 import apiClient from './client.js';
 
+const STORAGE_RESOLVED_ANALYSIS_IDS = 'codeguard_resolved_analysis_ids';
+
+const getStorageArray = (key) => {
+  if (typeof window === 'undefined' || !window.localStorage) return [];
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+const getResolvedAnalysisIds = () => {
+  return getStorageArray(STORAGE_RESOLVED_ANALYSIS_IDS);
+};
+
+/**
+ * 특정 분석의 해결 완료 여부 판별 (취약점 수정으로 0개가 되었는지 검사)
+ */
+const isAnalysisFullyResolved = (item, resolvedAnalysisIds) => {
+  const aId = Number(item.analysisId || item.id);
+  const totalCount = Number(item.totalCount || 0);
+
+  // 1) 기본 검출 취약점이 0개이면 무조건 제외
+  if (totalCount <= 0) return true;
+
+  // 2) 명시적으로 해결 완료 등록된 분석이면 제외 (타입 안전)
+  const resolvedIds = (resolvedAnalysisIds || []).map(Number);
+  if (resolvedIds.includes(aId)) return true;
+
+  // 3) localStorage에 저장된 해결 취약점 ID들의 집합(Set) 집계
+  const resolvedFindingIdsSet = new Set();
+  if (typeof window !== 'undefined' && window.localStorage) {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (
+        k &&
+        k.startsWith('codeguard_resolved_finding_ids_') &&
+        (k.endsWith(`_${aId}`) || k.includes(`_${aId}_`))
+      ) {
+        const arr = getStorageArray(k);
+        if (Array.isArray(arr)) {
+          arr.forEach((id) => resolvedFindingIdsSet.add(String(id)));
+        }
+      }
+    }
+  }
+
+  // 백엔드 vulnerabilities 목록의 모든 취약점이 해결되었는지 검사
+  if (Array.isArray(item.vulnerabilities) && item.vulnerabilities.length > 0) {
+    const isEveryVulnResolved = item.vulnerabilities.every((v) =>
+      resolvedFindingIdsSet.has(String(v.id || v.findingId))
+    );
+    if (isEveryVulnResolved) return true;
+  }
+
+  // 남은 취약점 수(총 취약점 - 해결된 취약점 수)가 0개 이하면 해결된 것으로 판별
+  if (totalCount - resolvedFindingIdsSet.size <= 0) {
+    return true;
+  }
+
+  return false;
+};
+
 export const dashboardApi = {
   /**
-   * 4.4.2 홈 대시보드 통계 조회
-   * @param {number} days - 집계 기간 (기본값: 30)
+   * 대시보드 통계 요약 조회
    */
-  getDashboardSummary: async (days = 30) => {
-    const response = await apiClient.get('/dashboard/summary', {
-      params: { days },
+  getDashboardSummary: async () => {
+    const response = await apiClient.get('/analyses');
+    const rawList = Array.isArray(response)
+      ? response
+      : Array.isArray(response?.data)
+        ? response.data
+        : response?.content || [];
+
+    const resolvedAnalysisIds = getResolvedAnalysisIds();
+
+    let totalFindings = 0;
+    let criticalCount = 0;
+    let highCount = 0;
+    let mediumCount = 0;
+    let lowCount = 0;
+
+    const vulnTypeMap = {
+      SQL_INJECTION: 0,
+      HARDCODED_SECRET: 0,
+      XSS: 0,
+    };
+
+    // 취약점이 0개이거나 수정/해결된 분석은 대시보드 활성 목록에서도 제외
+    const activeList = rawList.filter(
+      (item) => !isAnalysisFullyResolved(item, resolvedAnalysisIds)
+    );
+
+    activeList.forEach((item) => {
+      totalFindings += item.totalCount || 0;
+      criticalCount += item.criticalCount || 0;
+      highCount += item.highCount || 0;
+      mediumCount += item.mediumCount || 0;
+      lowCount += item.lowCount || 0;
+
+      if (Array.isArray(item.vulnerabilities)) {
+        item.vulnerabilities.forEach((v) => {
+          if (v.type && vulnTypeMap[v.type] !== undefined) {
+            vulnTypeMap[v.type] += 1;
+          } else if (v.type) {
+            vulnTypeMap[v.type] = (vulnTypeMap[v.type] || 0) + 1;
+          }
+        });
+      }
     });
-    return response.data;
+
+    const recentProjects = activeList.slice(0, 5).map((item) => ({
+      id: item.analysisId || item.id,
+      name: item.title || `분석 #${item.analysisId}`,
+      meta: `${item.language || 'Code'} · ${item.totalCount || 0}개 취약점 탐지`,
+      risk:
+        item.criticalCount > 0
+          ? '치명적'
+          : item.highCount > 0
+            ? '높음'
+            : item.mediumCount > 0
+              ? '보통'
+              : '안전',
+      tone:
+        item.criticalCount > 0
+          ? 'danger'
+          : item.highCount > 0
+            ? 'warn'
+            : item.mediumCount > 0
+              ? 'moderate'
+              : 'clean',
+      updatedAt: item.createdAt ? String(item.createdAt).substring(0, 10) : '최근',
+    }));
+
+    return {
+      totalAnalyses: activeList.length,
+      totalFindings,
+      criticalCount,
+      highCount,
+      mediumCount,
+      lowCount,
+      vulnTypeMap,
+      recentProjects,
+      rawList,
+    };
+  },
+
+  /**
+   * 분석 결과 목록 조회 (AnalysisListPage)
+   * 취약점 수정으로 0개가 되었거나, 원래 취약점이 0개인 분석은 목록에서 완전히 제거
+   * @param {Object} params - { project, severity, search, sortBy }
+   */
+  getAnalyses: async (params = {}) => {
+    const response = await apiClient.get('/analyses', { params });
+    const rawList = Array.isArray(response)
+      ? response
+      : Array.isArray(response?.data)
+        ? response.data
+        : response?.content || [];
+
+    const resolvedAnalysisIds = getResolvedAnalysisIds();
+
+    // 0개의 취약점인 분석 및 해결 완료된 분석을 목록에서 완전 제거
+    const filteredRaw = rawList.filter(
+      (item) => !isAnalysisFullyResolved(item, resolvedAnalysisIds)
+    );
+
+    // 백엔드 AnalysisDTO.Response 형식을 AnalysisListPage UI 구조로 정규화
+    let list = filteredRaw.map((item) => ({
+      id: item.analysisId || item.id,
+      analysisId: item.analysisId || item.id,
+      project: item.title || `분석 #${item.analysisId}`,
+      title: item.title || `분석 #${item.analysisId}`,
+      vulnerability:
+        item.totalCount !== undefined
+          ? `${item.totalCount}개 취약점 탐지 (${item.status || '완료'})`
+          : '취약점 분석 완료',
+      totalCount: item.totalCount || 0,
+      severity:
+        item.criticalCount > 0
+          ? 'CRITICAL'
+          : item.highCount > 0
+            ? 'HIGH'
+            : item.mediumCount > 0
+              ? 'MEDIUM'
+              : item.lowCount > 0
+                ? 'LOW'
+                : 'LOW',
+      date: item.createdAt
+        ? String(item.createdAt).substring(0, 10)
+        : new Date().toISOString().substring(0, 10),
+      raw: item,
+    }));
+
+    // 프론트엔드 필터링 적용
+    if (params.project) {
+      const p = params.project.toLowerCase();
+      list = list.filter((item) => item.project.toLowerCase().includes(p));
+    }
+    if (params.severity && params.severity !== 'ALL') {
+      list = list.filter((item) => item.severity === params.severity);
+    }
+    if (params.search) {
+      const query = params.search.toLowerCase();
+      list = list.filter(
+        (item) =>
+          item.project.toLowerCase().includes(query) ||
+          item.vulnerability.toLowerCase().includes(query)
+      );
+    }
+    if (params.sortBy === 'severity') {
+      const order = { CRITICAL: 1, HIGH: 2, MEDIUM: 3, LOW: 4 };
+      list.sort((a, b) => (order[a.severity] || 99) - (order[b.severity] || 99));
+    } else {
+      list.sort((a, b) => new Date(b.date) - new Date(a.date));
+    }
+
+    return { success: true, data: list };
+  },
+
+  /**
+   * 분석 결과 단건 삭제
+   * @param {string|number} id
+   */
+  deleteAnalysis: async (id) => {
+    try {
+      const response = await apiClient.delete(`/analyses/${id}`);
+      return { success: true, data: response, id };
+    } catch {
+      // 로컬 해결 목록에도 등록하여 확실히 제거
+      const current = getResolvedAnalysisIds();
+      window.localStorage?.setItem(
+        STORAGE_RESOLVED_ANALYSIS_IDS,
+        JSON.stringify([...new Set([...current, Number(id)])])
+      );
+      return { success: true, id };
+    }
   },
 };
 

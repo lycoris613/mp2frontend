@@ -3,6 +3,8 @@
  */
 import apiClient from './client.js';
 
+const unwrap = (res) => (res && res.data !== undefined ? res.data : res);
+
 export const analysisApi = {
   /**
    * 4.1.1 분석 요청 생성 및 시작
@@ -10,7 +12,7 @@ export const analysisApi = {
    */
   createAnalysis: async (data) => {
     const response = await apiClient.post('/analyses', data);
-    return response.data;
+    return unwrap(response);
   },
 
   /**
@@ -19,7 +21,7 @@ export const analysisApi = {
    */
   getAnalysisStatus: async (analysisId) => {
     const response = await apiClient.get(`/analyses/${analysisId}/status`);
-    return response.data;
+    return unwrap(response);
   },
 
   /**
@@ -28,7 +30,7 @@ export const analysisApi = {
    */
   getAnalyses: async (params = {}) => {
     const response = await apiClient.get('/analyses', { params });
-    return response.data;
+    return unwrap(response);
   },
 
   /**
@@ -37,7 +39,7 @@ export const analysisApi = {
    */
   getAnalysisDetail: async (analysisId) => {
     const response = await apiClient.get(`/analyses/${analysisId}`);
-    return response.data;
+    return unwrap(response);
   },
 
   /**
@@ -55,7 +57,7 @@ export const analysisApi = {
    */
   getAnalysisFiles: async (analysisId) => {
     const response = await apiClient.get(`/analyses/${analysisId}/files`);
-    return response.data;
+    return unwrap(response);
   },
 
   /**
@@ -65,7 +67,7 @@ export const analysisApi = {
    */
   getAnalysisFileContent: async (analysisId, fileId) => {
     const response = await apiClient.get(`/analyses/${analysisId}/files/${fileId}`);
-    return response.data;
+    return unwrap(response);
   },
 
   /**
@@ -74,7 +76,7 @@ export const analysisApi = {
    */
   getAnalysisReport: async (analysisId) => {
     const response = await apiClient.get(`/analyses/${analysisId}/report`);
-    return response.data;
+    return unwrap(response);
   },
 };
 

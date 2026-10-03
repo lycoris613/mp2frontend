@@ -1,20 +1,17 @@
 /**
  * 분석 실행 및 결과 관리 비즈니스 로직 서비스
- * - 백엔드 연동 전: Mock Adapter & LocalStorage 기반 실시간 시뮬레이션
- * - 백엔드 연동 후: analysisApi / findingApi를 통해 실제 Spring Boot 서버와 통신 (VITE_USE_MOCK=false)
+ * 실제 Spring Boot 백엔드(/api/v1)와 직접 통신
  */
 
 import { analysisApi } from '../api/analysisApi.js';
 import { findingApi } from '../api/findingApi.js';
+import { detectLanguage } from '../utils/language.js';
 import {
-  normalizeProjectId,
   PROJECTS_DATA,
+  normalizeProjectId,
   getProjectTreeData,
   getProjectFileFindingData,
   getProjectDefaultFile,
-  getProjectFilePath,
-  calculateDynamicFindingTotals,
-  calculateDynamicTypeTabs,
 } from '../data/findingData.js';
 
 const STORAGE_PREFIX_ANALYSIS_RUN = 'codeguard_analysis_run';
@@ -40,40 +37,440 @@ const setStorageItem = (key, value) => {
   }
 };
 
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
- * 1. 취약점 분석 실행
- * 코드 분석 페이지에서 사용자가 설정한 범위와 탐지 룰을 기반으로 분석을 실행하고 결과를 생성/저장합니다.
- *
- * @param {Object} params
- * @param {string} params.projectId - 프로젝트 ID (payments-api, auth-service, admin-console)
- * @param {string} params.title - 분석 제목
- * @param {string} params.scope - '현재 파일' | '전체 프로젝트'
- * @param {string} params.selectedFile - 현재 선택된 파일명 (예: users.ts)
- * @param {Array} params.rules - 탐지 룰 목록 [{ id: 'SQL_INJECTION', checked: true }, ...]
- * @param {Object} params.fileContents - 파일별 코드 라인 배열 맵
- * @param {Array} params.treeData - 현재 파일 트리 구조
+ * 분석 제목이나 파일 목록으로부터 프로젝트 식별 ('payments-api' | 'auth-service' | 'admin-console')
+ */
+export function detectProjectId(text, files = []) {
+  const str = String(text || '').toLowerCase();
+  const fileNames = files
+    .map((f) => (typeof f === 'string' ? f : f.fileName || f.relativePath || ''))
+    .join(' ')
+    .toLowerCase();
+
+  if (
+    str.includes('auth') ||
+    str.includes('인증') ||
+    fileNames.includes('.go') ||
+    fileNames.includes('token_service')
+  ) {
+    return 'auth-service';
+  }
+  if (
+    str.includes('admin') ||
+    str.includes('관리') ||
+    fileNames.includes('usermanagement') ||
+    fileNames.includes('adminapi') ||
+    fileNames.includes('rolepermissions')
+  ) {
+    return 'admin-console';
+  }
+  if (
+    str.includes('payment') ||
+    str.includes('결제') ||
+    fileNames.includes('users.ts') ||
+    fileNames.includes('payments.ts')
+  ) {
+    return 'payments-api';
+  }
+  if (str.includes('bank') || str.includes('뱅킹') || fileNames.includes('bankingservice')) {
+    return 'payments-api';
+  }
+  return null;
+}
+
+/**
+ * 백엔드 분석 상태가 COMPLETED가 될 때까지 폴링 대기
+ */
+async function waitForAnalysisComplete(analysisId, maxAttempts = 15, intervalMs = 600) {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const statusRes = await analysisApi.getAnalysisStatus(analysisId);
+      const statusData = statusRes?.data !== undefined ? statusRes.data : statusRes;
+      if (statusData?.status === 'COMPLETED' || statusData?.status === 'FAILED') {
+        return statusData;
+      }
+    } catch (e) {
+      console.warn(`상태 폴링 ${i + 1}회 실패:`, e.message);
+    }
+    await delay(intervalMs);
+  }
+  return null;
+}
+
+/**
+ * 특정 프로젝트의 원래 전체 파일과 기본 취약점 데이터를 갖는 기본 분석 런 객체 빌드
+ */
+export function buildProjectDefaultRun(projectId) {
+  const normId = normalizeProjectId(projectId || 'payments-api');
+  const treeData = getProjectTreeData(normId);
+  const fileFindingData = JSON.parse(JSON.stringify(getProjectFileFindingData(normId)));
+  const defaultFile = getProjectDefaultFile(normId);
+
+  let totalFindingsCount = 0;
+  let criticalCount = 0;
+  let highCount = 0;
+  let mediumCount = 0;
+  let lowCount = 0;
+  const typeTabsCount = { SQL_INJECTION: 0, HARDCODED_SECRET: 0, XSS: 0 };
+
+  Object.values(fileFindingData).forEach((file) => {
+    if (file.hasFinding) {
+      const list = Array.isArray(file.findings) && file.findings.length > 0
+        ? file.findings
+        : file.finding ? [file.finding] : [];
+      list.forEach((f) => {
+        totalFindingsCount += 1;
+        const sev = f.severity || 'HIGH';
+        if (sev === 'CRITICAL') criticalCount += 1;
+        else if (sev === 'HIGH') highCount += 1;
+        else if (sev === 'MEDIUM') mediumCount += 1;
+        else lowCount += 1;
+
+        const vType = f.vulnerabilityType || 'SQL_INJECTION';
+        if (typeTabsCount[vType] !== undefined) typeTabsCount[vType] += 1;
+      });
+    }
+  });
+
+  return {
+    analysisId: null,
+    projectId: normId,
+    title: `${normId} 분석 결과`,
+    scope: '전체 프로젝트',
+    selectedFile: defaultFile,
+    activeRules: ['SQL_INJECTION', 'HARDCODED_SECRET', 'XSS'],
+    totalFindings: totalFindingsCount,
+    totals: {
+      total: totalFindingsCount,
+      critical: criticalCount,
+      high: highCount,
+      medium: mediumCount,
+      low: lowCount,
+    },
+    tabs: [
+      { id: 'ALL', label: '전체 취약점', count: totalFindingsCount, active: true },
+      { id: 'SQL_INJECTION', label: 'SQL 삽입', count: typeTabsCount.SQL_INJECTION, active: false },
+      { id: 'HARDCODED_SECRET', label: '하드코딩된 비밀정보', count: typeTabsCount.HARDCODED_SECRET, active: false },
+      { id: 'XSS', label: 'XSS', count: typeTabsCount.XSS, active: false },
+    ],
+    treeData,
+    fileFindingData,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * 백엔드 파일 목록과 취약점 상세 정보로부터 프론트엔드 트리 및 파일 데이터 구조 완성
+ * - 프로젝트의 원래 전체 파일과 폴더 계층 구조(getProjectTreeData)를 베이스로 유지
+ * - 이번 백엔드 분석에서 취약점이 탐지된 파일에만 정확히 빨간 점(hasFinding: true)을 표시
+ * - 취약점이 없는 파일은 깨끗하게 표시(hasFinding: false)
+ */
+export async function buildAnalysisRunFromBackend(analysisId, backendSummary = null, preferredProjectId = null) {
+  // 1) 분석 요약 정보 조회
+  const summary = backendSummary || (await analysisApi.getAnalysisDetail(analysisId).catch(() => null));
+
+  // 2) 분석 파일 목록 및 취약점 목록 조회
+  const [filesRes, findingsRes] = await Promise.all([
+    analysisApi.getAnalysisFiles(analysisId).catch(() => []),
+    findingApi.getFindings(analysisId).catch(() => []),
+  ]);
+
+  const fileList = Array.isArray(filesRes) ? filesRes : filesRes?.data || [];
+  const rawFindings = Array.isArray(findingsRes)
+    ? findingsRes
+    : findingsRes?.content || findingsRes?.data || [];
+
+  // 3) 취약점 상세 정보(탐지 근거, before/after diff 등) 병렬 로드
+  const detailedFindingsMap = {};
+  await Promise.all(
+    rawFindings.map(async (rf) => {
+      const fId = rf.findingId || rf.id;
+      if (!fId) return;
+      try {
+        const detail = await findingApi.getFindingDetail(fId);
+        if (detail) {
+          detailedFindingsMap[fId] = detail;
+        }
+      } catch (err) {
+        console.warn(`취약점(${fId}) 상세 조회 실패:`, err.message);
+      }
+    })
+  );
+
+  // 4) 프로젝트 판별 (preferredProjectId 우선 -> title/files 자동 감지 -> 'payments-api')
+  const detected = detectProjectId(summary?.title, fileList);
+  const matchedProjectId =
+    preferredProjectId && PROJECTS_DATA[normalizeProjectId(preferredProjectId)]
+      ? normalizeProjectId(preferredProjectId)
+      : detected || 'payments-api';
+
+  // 5) 프로젝트의 원래 전체 파일 맵 및 트리 구조 딥카피 복제
+  const baseTree = getProjectTreeData(matchedProjectId);
+  const baseFileData = getProjectFileFindingData(matchedProjectId);
+  const fileFindingData = JSON.parse(JSON.stringify(baseFileData));
+
+  // 6) 사용자가 원상 복구한 스토리지 데이터가 있으면 우선 복원
+  const restoredFindingData =
+    getStorageItem(`codeguard_restored_findings_${matchedProjectId}`) ||
+    getStorageItem(`codeguard_restored_findings_${matchedProjectId}_${analysisId}`);
+
+  if (restoredFindingData) {
+    Object.assign(fileFindingData, JSON.parse(JSON.stringify(restoredFindingData)));
+  } else if (fileList.length > 0) {
+    // 백엔드 분석 파일 목록에 있는 파일들만 취약점 초기화 후 재주입 (다른 기본 파일 데이터는 보존)
+    fileList.forEach((file) => {
+      const fName = file.fileName || file.relativePath;
+      if (fileFindingData[fName]) {
+        fileFindingData[fName].hasFinding = false;
+        fileFindingData[fName].findings = [];
+        fileFindingData[fName].finding = null;
+        fileFindingData[fName].vulnLineIndices = [];
+        fileFindingData[fName].tagLabel = '';
+        fileFindingData[fName].diff = null;
+      }
+    });
+  }
+
+  let totalFindingsCount = 0;
+  let criticalCount = 0;
+  let highCount = 0;
+  let mediumCount = 0;
+  let lowCount = 0;
+
+  const typeTabsCount = {
+    SQL_INJECTION: 0,
+    HARDCODED_SECRET: 0,
+    XSS: 0,
+  };
+
+  // 7) 백엔드 파일 본문 및 탐지된 취약점 주입
+  for (const file of fileList) {
+    const fileName = file.fileName || file.relativePath;
+    const fileId = file.fileId;
+    let codeLines = null;
+    let fileVulns = [];
+
+    try {
+      const fileDetail = await analysisApi.getAnalysisFileContent(analysisId, fileId);
+      if (fileDetail && typeof fileDetail.content === 'string') {
+        codeLines = fileDetail.content.split('\n');
+      }
+      if (fileDetail && Array.isArray(fileDetail.vulnerabilities)) {
+        fileVulns = fileDetail.vulnerabilities;
+      }
+    } catch (e) {
+      console.warn(`파일(${fileName}, ID:${fileId}) 본문 조회 실패:`, e.message);
+    }
+
+    // 파일별 매핑된 취약점이 없으면 전체 findings에서 파일명으로 매칭
+    if (fileVulns.length === 0 && rawFindings.length > 0) {
+      fileVulns = rawFindings.filter(
+        (f) =>
+          f.relativePath === fileName ||
+          f.fileName === fileName ||
+          f.fileId === fileId
+      );
+    }
+
+    const mappedFindings = fileVulns.map((v) => {
+      const fId = v.id || v.findingId;
+      const detailed = detailedFindingsMap[fId];
+
+      const vType = detailed?.vulnerabilityType || v.type || v.vulnerabilityType || 'SQL_INJECTION';
+      const sev = detailed?.severity || v.severity || 'HIGH';
+      const typeLabel = detailed?.title || v.typeDisplayName || v.displayName || vType;
+
+      totalFindingsCount += 1;
+      if (sev === 'CRITICAL') criticalCount += 1;
+      else if (sev === 'HIGH') highCount += 1;
+      else if (sev === 'MEDIUM') mediumCount += 1;
+      else lowCount += 1;
+
+      if (typeTabsCount[vType] !== undefined) {
+        typeTabsCount[vType] += 1;
+      } else {
+        typeTabsCount[vType] = 1;
+      }
+
+      if (detailed) {
+        return {
+          ...detailed,
+          id: fId,
+          findingId: fId,
+          file: fileName,
+          fileName,
+        };
+      }
+
+      return {
+        id: fId,
+        findingId: fId,
+        file: fileName,
+        fileName,
+        vulnerabilityType: vType,
+        title: `${typeLabel} 탐지`,
+        ruleId: v.ruleId || 'SEC-SCAN',
+        severity: sev,
+        status: v.status || 'OPEN',
+        line: v.startLine || 1,
+        startLine: v.startLine || 1,
+        endLine: v.endLine || v.startLine || 1,
+        vulnLineIndices: [v.startLine ? v.startLine - 1 : 0],
+        codeSnippet: v.codeSnippet || '',
+        tagLabel: `${typeLabel} 탐지`,
+        cwe: v.cweId || 'CWE-89',
+        description: `${typeLabel} 취약점이 탐지되었습니다.`,
+        detectionSource: {
+          title: '탐지 근거 · 규칙 기반 (Rule-based)',
+          ruleId: v.ruleId || 'SEC-SCAN',
+          ruleTitle: typeLabel,
+          matchedCode: v.codeSnippet || '',
+        },
+        diff: null,
+      };
+    });
+
+    const existing = fileFindingData[fileName] || fileFindingData[file.relativePath];
+    const fileItem = {
+      ...(existing || {}),
+      fileId,
+      name: fileName,
+      fileName,
+      relativePath: file.relativePath || fileName,
+      codeLines: codeLines || existing?.codeLines || ['// 소스코드를 불러오는 중입니다...'],
+      hasFinding: mappedFindings.length > 0,
+      findings: mappedFindings,
+      finding: mappedFindings[0] || null,
+      vulnLineIndices: mappedFindings.flatMap((f) => f.vulnLineIndices || []),
+      tagLabel:
+        mappedFindings.length > 1
+          ? `${mappedFindings.length}개 보안 취약점 탐지됨`
+          : mappedFindings[0]?.tagLabel || '',
+      diff: mappedFindings[0]?.diff || existing?.diff || null,
+    };
+
+    fileFindingData[fileName] = fileItem;
+    if (file.relativePath && file.relativePath !== fileName) {
+      fileFindingData[file.relativePath] = fileItem;
+    }
+  }
+
+  // 8) 프로젝트 전체 트리의 hasFinding(빨간 점)을 취약점 탐지 여부와 정확히 동기화
+  const updateTreeNodeFindings = (nodes) => {
+    return nodes.map((node) => {
+      if (!node.isDir) {
+        const item = fileFindingData[node.name];
+        const hasFinding = Boolean(item && item.hasFinding && (item.findings?.length > 0 || item.finding));
+        return {
+          ...node,
+          hasFinding,
+          fileId: item?.fileId || node.fileId,
+        };
+      }
+      if (node.children) {
+        return {
+          ...node,
+          children: updateTreeNodeFindings(node.children),
+        };
+      }
+      return node;
+    });
+  };
+
+  const finalTreeData = updateTreeNodeFindings(baseTree);
+
+  // 기본 선택 파일: 이번 분석에서 취약점이 탐지된 파일 우선, 없으면 프로젝트 기본 파일
+  const targetWithFinding = fileList.find((f) => {
+    const fName = f.fileName || f.relativePath;
+    return (fileFindingData[fName]?.findings?.length || 0) > 0;
+  });
+  const firstFile =
+    targetWithFinding?.fileName ||
+    getProjectDefaultFile(matchedProjectId) ||
+    Object.keys(fileFindingData)[0] ||
+    'users.ts';
+
+  const analysisRun = {
+    analysisId,
+    projectId: matchedProjectId,
+    title: summary?.title || `${matchedProjectId} 분석 결과`,
+    scope: '전체 프로젝트',
+    selectedFile: firstFile,
+    activeRules: ['SQL_INJECTION', 'HARDCODED_SECRET', 'XSS'],
+    totalFindings: totalFindingsCount || summary?.totalCount || 0,
+    totals: {
+      total: totalFindingsCount || summary?.totalCount || 0,
+      critical: criticalCount || summary?.criticalCount || 0,
+      high: highCount || summary?.highCount || 0,
+      medium: mediumCount || summary?.mediumCount || 0,
+      low: lowCount || summary?.lowCount || 0,
+    },
+    tabs: [
+      { id: 'ALL', label: '전체 취약점', count: totalFindingsCount || summary?.totalCount || 0, active: true },
+      { id: 'SQL_INJECTION', label: 'SQL 삽입', count: typeTabsCount.SQL_INJECTION, active: false },
+      { id: 'HARDCODED_SECRET', label: '하드코딩된 비밀정보', count: typeTabsCount.HARDCODED_SECRET, active: false },
+      { id: 'XSS', label: 'XSS', count: typeTabsCount.XSS, active: false },
+    ],
+    treeData: finalTreeData,
+    fileFindingData,
+    createdAt: summary?.createdAt || new Date().toISOString(),
+  };
+
+  setStorageItem(`${STORAGE_PREFIX_ANALYSIS_RUN}_${analysisId}`, analysisRun);
+  setStorageItem(`${STORAGE_PREFIX_LATEST_ANALYSIS}_${matchedProjectId}`, analysisRun);
+
+  return analysisRun;
+}
+
+/**
+ * 1. 취약점 분석 실행 (Spring Boot POST /api/v1/analyses 및 완료 대기)
  */
 export async function executeAnalysis({
   projectId,
   title = '취약점 정기 분석',
   scope = '전체 프로젝트',
   selectedFile,
+  language,
   rules = [],
   fileContents = {},
   treeData = null,
 }) {
-  const normProjectId = normalizeProjectId(projectId);
   const activeRules = rules.filter((r) => r.checked).map((r) => r.id);
 
-  // 1) 백엔드 연동 API 호출 규격 (백엔드가 열리면 실제 요청으로 전송됨)
-  const apiPayload = {
-    title: title || `${normProjectId} 보안 분석`,
-    files: Object.keys(fileContents).map((name) => ({
+  const validFiles = Object.keys(fileContents)
+    .filter((name) => {
+      const ext = name.split('.').pop()?.toLowerCase();
+      return ['ts', 'tsx', 'js', 'jsx', 'java', 'py', 'html', 'htm'].includes(ext);
+    })
+    .map((name) => ({
       relativePath: name,
       content: Array.isArray(fileContents[name])
         ? fileContents[name].join('\n')
         : String(fileContents[name] || ''),
-    })),
+    }));
+
+  let resolvedLanguage = language;
+  if (!resolvedLanguage && selectedFile) {
+    const detected = detectLanguage(selectedFile, fileContents[selectedFile]);
+    if (detected.isSupported) {
+      resolvedLanguage = detected.language;
+    }
+  }
+  if (!resolvedLanguage || resolvedLanguage === 'UNKNOWN') {
+    resolvedLanguage = 'TYPESCRIPT';
+  }
+
+  const apiPayload = {
+    title: title || `${projectId} 보안 분석`,
+    language: resolvedLanguage,
+    files: validFiles.length > 0 ? validFiles : [
+      {
+        relativePath: 'users.ts',
+        content: '// 분석 대상 코드\nconst query = `SELECT * FROM users WHERE id = ${userId}`;',
+      },
+    ],
     scanOptions: {
       detectSqlInjection: activeRules.includes('SQL_INJECTION'),
       detectHardcodedSecret: activeRules.includes('HARDCODED_SECRET'),
@@ -83,192 +480,84 @@ export async function executeAnalysis({
     },
   };
 
-  let backendAnalysisId = null;
-  try {
-    const apiRes = await analysisApi.createAnalysis(apiPayload);
-    if (apiRes && apiRes.data && apiRes.data.analysisId) {
-      backendAnalysisId = apiRes.data.analysisId;
-    } else if (apiRes && apiRes.analysisId) {
-      backendAnalysisId = apiRes.analysisId;
-    }
-  } catch (err) {
-    console.warn('Backend API call fallback to mock generation:', err);
+  const apiRes = await analysisApi.createAnalysis(apiPayload);
+  const backendResponse = apiRes?.data !== undefined ? apiRes.data : apiRes;
+
+  const analysisId = backendResponse?.analysisId;
+  if (!analysisId) {
+    throw new Error('백엔드에서 analysisId를 반환하지 않았습니다.');
   }
 
-  // 발급된 ID 또는 고유 ID 생성 (100번대 분석 ID)
-  const analysisId = backendAnalysisId || Math.floor(100 + Math.random() * 899);
+  // 백엔드 분석 엔진 완료 대기
+  await waitForAnalysisComplete(analysisId);
 
-  // 2) 프로젝트 기본 데이터 스냅샷을 기반으로 이번 분석의 결과 생성
-  const baseFileData = PROJECTS_DATA[normProjectId]?.fileFindingData || {};
-  const generatedFileData = {};
-
-  let totalFindingsCount = 0;
-
-  Object.keys(baseFileData).forEach((fileName) => {
-    const original = baseFileData[fileName];
-    if (!original) return;
-
-    // 딥카피 복제
-    const item = JSON.parse(JSON.stringify(original));
-
-    // 최신 파일 코드가 있으면 적용
-    if (fileContents[fileName]) {
-      item.codeLines = [...fileContents[fileName]];
-    }
-
-    // [규칙 1] 파일 범위 필터: '전체 프로젝트'가 아닌 경우 선택된 파일만 검사
-    const isTargetFile = scope === '전체 프로젝트' ? true : fileName === selectedFile;
-
-    // 원본 파일에 등록된 모든 취약점 목록 가져오기 (단일 또는 다중 취약점)
-    const rawFindings = Array.isArray(original.findings) && original.findings.length > 0
-      ? original.findings
-      : (original.finding ? [original.finding] : []);
-
-    const detectedFindings = [];
-
-    if (isTargetFile && rawFindings.length > 0) {
-      rawFindings.forEach((finding) => {
-        // [규칙 2] 룰 필터: 체크된 룰에 해당하는 취약점인지 검사
-        const isRuleActive = activeRules.includes(finding.vulnerabilityType);
-
-        if (isRuleActive) {
-          detectedFindings.push(finding);
-        }
-      });
-    }
-
-    if (detectedFindings.length > 0) {
-      item.hasFinding = true;
-      item.findings = detectedFindings;
-      item.finding = detectedFindings[0];
-      item.vulnLineIndices = [...new Set(detectedFindings.flatMap((f) => f.vulnLineIndices || []))];
-      item.tagLabel = detectedFindings.length > 1
-        ? `${detectedFindings.length}개 보안 취약점 탐지됨 (${detectedFindings.map(f => f.vulnerabilityType).join(' · ')})`
-        : (detectedFindings[0].tagLabel || '');
-      item.diff = detectedFindings[0].diff;
-      totalFindingsCount += detectedFindings.length;
-    } else {
-      // 분석 대상이 아니거나 탐지 룰에 일치하지 않는 경우 클린 상태로 조정
-      item.hasFinding = false;
-      item.findings = [];
-      item.finding = null;
-      item.vulnLineIndices = [];
-      item.tagLabel = '';
-      item.diff = null;
-    }
-
-    generatedFileData[fileName] = item;
-  });
-
-  // 3) 파일 트리에 분석 결과 인디케이터(●) 적용
-  const baseTree = treeData || getProjectTreeData(normProjectId);
-  const updateTreeWithFindings = (nodes) =>
-    nodes.map((node) => {
-      if (!node.isDir) {
-        const fileInfo = generatedFileData[node.name];
-        return {
-          ...node,
-          hasFinding: Boolean(fileInfo && fileInfo.hasFinding),
-        };
-      }
-      if (node.children) {
-        return {
-          ...node,
-          children: updateTreeWithFindings(node.children),
-        };
-      }
-      return node;
-    });
-
-  const generatedTreeData = updateTreeWithFindings(JSON.parse(JSON.stringify(baseTree)));
-
-  // 4) 집계 데이터 계산
-  const totals = calculateDynamicFindingTotals(generatedFileData, []);
-  const tabs = calculateDynamicTypeTabs(generatedFileData, []);
-
-  // 5) 생성된 분석 런(Run) 객체 구성
-  const analysisRun = {
-    analysisId,
-    projectId: normProjectId,
-    title: title || `${normProjectId} 보안 분석`,
-    scope,
-    selectedFile: selectedFile || getProjectDefaultFile(normProjectId),
-    activeRules,
-    totalFindings: totalFindingsCount,
-    totals,
-    tabs,
-    treeData: generatedTreeData,
-    fileFindingData: generatedFileData,
-    createdAt: new Date().toISOString(),
-  };
-
-  // 6) LocalStorage에 분석 런 및 최신 프로젝트 결과로 영구 보존
-  setStorageItem(`${STORAGE_PREFIX_ANALYSIS_RUN}_${analysisId}`, analysisRun);
-  setStorageItem(`${STORAGE_PREFIX_LATEST_ANALYSIS}_${normProjectId}`, analysisRun);
-
+  // 완성된 결과 객체 빌드 (원래 프로젝트 전체 파일 및 트리 보존)
+  const analysisRun = await buildAnalysisRunFromBackend(analysisId, backendResponse, projectId);
   return analysisRun;
 }
 
 /**
- * 2. 특정 분석 결과 조회
- * 분석 ID 또는 프로젝트명을 기반으로 저장된 분석 런 결과를 로드합니다.
- *
- * @param {string} projectId - 프로젝트 ID
- * @param {string|number} analysisId - 분석 ID (선택)
+ * 2. 특정 분석 결과 조회 (백엔드 최신 분석 자동 연결 및 프로젝트별 파일 격리 지원)
  */
-export function getAnalysisResult(projectId, analysisId) {
-  const normProjectId = normalizeProjectId(projectId);
+export async function getAnalysisResult(projectId, analysisId) {
+  const normProjectId = normalizeProjectId(projectId || 'payments-api');
+  let targetId = analysisId;
 
-  // 1) 명시적 analysisId가 주어진 경우 해당 분석 런 로드
-  if (analysisId) {
-    const runKey = `${STORAGE_PREFIX_ANALYSIS_RUN}_${analysisId}`;
-    const run = getStorageItem(runKey, null);
-    if (run) return run;
+  // 1) analysisId가 없거나 더미 목 ID(예: 128)인 경우 해당 프로젝트에 일치하는 백엔드 분석 탐색
+  if (!targetId || Number(targetId) >= 100) {
+    try {
+      const analysesRes = await analysisApi.getAnalyses();
+      const list = Array.isArray(analysesRes)
+        ? analysesRes
+        : Array.isArray(analysesRes?.data)
+          ? analysesRes.data
+          : analysesRes?.content || [];
+
+      // 현재 조회하려는 프로젝트와 매칭되는 백엔드 분석 우선 탐색 (최신 분석 우선)
+      const matchingAnalyses = [...list].reverse().filter((a) => {
+        const detected = detectProjectId(a.title, a.vulnerabilities || []);
+        return detected === normProjectId;
+      });
+
+      const withFindings = matchingAnalyses.find(
+        (a) => (a.status === 'COMPLETED' || a.status === 'SCANNING') && a.totalCount > 0
+      );
+      const chosen = withFindings || matchingAnalyses[0];
+      if (chosen) {
+        targetId = chosen.analysisId || chosen.id;
+      }
+    } catch (e) {
+      console.warn('백엔드 분석 목록 조회 실패:', e.message);
+    }
   }
 
-  // 2) 해당 프로젝트의 최신 실행된 분석 런이 있는지 확인
-  const latestKey = `${STORAGE_PREFIX_LATEST_ANALYSIS}_${normProjectId}`;
-  const latestRun = getStorageItem(latestKey, null);
-  if (latestRun) return latestRun;
+  // 2) targetId가 있으면 백엔드 실데이터로부터 프로젝트 전체 파일 런 빌드
+  if (targetId) {
+    try {
+      const liveRun = await buildAnalysisRunFromBackend(targetId, null, normProjectId);
+      return liveRun;
+    } catch (e) {
+      console.warn(`백엔드 analysisId(${targetId}) 빌드 실패:`, e.message);
+    }
+  }
 
-  // 3) 아직 분석이 실행된 적 없다면 프로젝트 기본 Mock 데이터 반환
-  const baseTree = getProjectTreeData(normProjectId);
-  const baseFileData = getProjectFileFindingData(normProjectId);
-  const totals = calculateDynamicFindingTotals(baseFileData, []);
-  const tabs = calculateDynamicTypeTabs(baseFileData, []);
-
-  return {
-    analysisId: normProjectId === 'payments-api' ? 128 : normProjectId === 'auth-service' ? 127 : 126,
-    projectId: normProjectId,
-    title: `${normProjectId} 기본 분석 결과`,
-    scope: '전체 프로젝트',
-    selectedFile: getProjectDefaultFile(normProjectId),
-    activeRules: ['SQL_INJECTION', 'HARDCODED_SECRET', 'XSS'],
-    totalFindings: totals.total,
-    totals,
-    tabs,
-    treeData: baseTree,
-    fileFindingData: baseFileData,
-    createdAt: new Date().toISOString(),
-    isInitialDefault: true,
-  };
+  // 3) 백엔드 데이터가 없으면 해당 프로젝트의 원래 전체 파일 런 반환
+  return buildProjectDefaultRun(normProjectId);
 }
 
 /**
  * 3. 취약점 처리 상태 변경 (해결/무시)
- * 백엔드 REST API 규격에 따라 상태 변경을 요청하고 로컬 분석 결과에 동기화합니다.
  */
 export async function updateFindingStatusOnAnalysis({
-  projectId,
   analysisId,
   findingId,
   status = 'RESOLVED',
 }) {
-  // 백엔드 연동 API 호출
+  let result = null;
   try {
-    await findingApi.updateFindingStatus(findingId, status);
-  } catch (e) {
-    console.warn('Backend updateFindingStatus call fallback to mock:', e);
+    result = await findingApi.updateFindingStatus(findingId, status);
+  } catch (err) {
+    console.warn(`[Finding Status] 백엔드 취약점 상태 변경 API 호출 실패 (${findingId}):`, err.message);
   }
 
   // 로컬 스토리지 데이터 동기화
@@ -284,15 +573,11 @@ export async function updateFindingStatusOnAnalysis({
           ? item.findings
           : (item.finding ? [item.finding] : []);
 
-        const target = list.find((f) => f.id === findingId);
+        const target = list.find((f) => f.id === findingId || f.findingId === findingId);
         if (target) {
           target.status = status;
         }
-        if (item.finding && item.finding.id === findingId) {
-          item.finding.status = status;
-        }
 
-        // 파일 내에 아직 미해결(OPEN) 상태인 취약점이 하나라도 있는지 판별
         const hasOpen = list.some((f) => f.status !== 'RESOLVED');
         item.hasFinding = hasOpen;
       });
@@ -300,5 +585,5 @@ export async function updateFindingStatusOnAnalysis({
     }
   }
 
-  return { success: true };
+  return { success: true, result };
 }

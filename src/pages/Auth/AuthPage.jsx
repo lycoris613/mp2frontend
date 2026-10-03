@@ -1,51 +1,82 @@
 import { useState } from 'react';
-import { ArrowLeft, UserPlus, LogIn } from 'lucide-react';
+import { ArrowLeft, UserPlus, LogIn, AlertCircle, CheckCircle } from 'lucide-react';
 import { PAGES } from '../../constants/navigation';
+import { authenticateUser, registerUser } from '../../services/authService';
 
 /**
- * [SCR-004] 로그인 및 회원가입 디자인 페이지
+ * [SCR-004] 로그인 및 회원가입 화면
  * 04 UI화면 설계서 2.1절 준수 (사이드바 없는 중앙 단일 카드 레이아웃)
  *
- * @param {function} onLoginSuccess - 로그인 콜백
- * @param {function} setPage - 페이지 전환 콜백
+ * @param {function} onLoginSuccess - 로그인 성공 콜백(sessionUser 전달)
+ * @param {function} setPage - 페이지 전환 콜백 (router 미사용 환경 대비, 선택)
  */
 export default function AuthPage({ onLoginSuccess, setPage }) {
   const [mode, setMode] = useState('login'); // 'login' | 'signup'
+  const [alert, setAlert] = useState(null); // { type: 'error'|'success', message }
 
-  // 로그인 폼 상태 (디자인용)
+  // 로그인 폼 상태
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
-  // 회원가입 폼 상태 (디자인용 - 직책 필드 제거됨)
+  // 회원가입 폼 상태 (직책 필드는 UI에서 제거, 기본값으로 저장)
   const [signupName, setSignupName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
 
-  // 로그인 버튼 클릭 시
-  const handleLoginSubmit = (e) => {
-    e.preventDefault();
-    const isSeoyeon = loginEmail.includes('seoyeon') || loginEmail.includes('jaehoon');
-    const user = {
-      name: isSeoyeon ? '서연' : (loginEmail ? loginEmail.split('@')[0] : '지웅'),
-      role: isSeoyeon ? 'Backend' : 'Frontend / LLM',
-    };
-    onLoginSuccess?.(user);
-    setPage(PAGES.HOME);
+  const switchMode = (nextMode) => {
+    setMode(nextMode);
+    setAlert(null);
   };
 
-  // 회원가입 버튼 클릭 시
-  const handleSignupSubmit = (e) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 로그인 버튼 클릭 시 — authService로 백엔드 실제 사용자 검증
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    const user = {
-      name: signupName || '신규회원',
-      role: 'Frontend / LLM',
-    };
-    onLoginSuccess?.(user);
-    setPage(PAGES.HOME);
+    if (!loginEmail.trim()) {
+      setAlert({ type: 'error', message: '이메일을 입력해 주세요.' });
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const sessionUser = await authenticateUser(loginEmail, loginPassword);
+      setAlert(null);
+      onLoginSuccess?.(sessionUser);
+      setPage?.(PAGES.HOME);
+    } catch (err) {
+      setAlert({ type: 'error', message: err.message });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // 데모 계정 간편 입력
+  // 회원가입 버튼 클릭 시 — 백엔드 사용자 등록 후 로그인 탭으로 전환
+  const handleSignupSubmit = async (e) => {
+    e.preventDefault();
+    if (signupPassword !== signupConfirmPassword) {
+      setAlert({ type: 'error', message: '비밀번호가 일치하지 않습니다.' });
+      return;
+    }
+    if (!signupEmail.trim() || !signupPassword) {
+      setAlert({ type: 'error', message: '이메일과 비밀번호를 모두 입력해 주세요.' });
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await registerUser({ name: signupName, email: signupEmail, password: signupPassword });
+      setLoginEmail(signupEmail);
+      setLoginPassword('');
+      setMode('login');
+      setAlert({ type: 'success', message: '회원가입이 완료되었습니다. 로그인해 주세요.' });
+    } catch (err) {
+      setAlert({ type: 'error', message: err.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // 데모 계정 간편 입력 (백엔드 실제 계정)
   const fillDemoAccount = (email, pw) => {
     setLoginEmail(email);
     setLoginPassword(pw);
@@ -54,7 +85,7 @@ export default function AuthPage({ onLoginSuccess, setPage }) {
   return (
     <div className="auth-container">
       {/* 홈으로 돌아가기 버튼 */}
-      <button className="auth-back-btn" onClick={() => setPage(PAGES.HOME)}>
+      <button className="auth-back-btn" onClick={() => setPage?.(PAGES.HOME)}>
         <ArrowLeft size={14} />
         <span>홈 화면으로 돌아가기</span>
       </button>
@@ -72,7 +103,7 @@ export default function AuthPage({ onLoginSuccess, setPage }) {
           <button
             type="button"
             className={`auth-tab-btn ${mode === 'login' ? 'active' : ''}`}
-            onClick={() => setMode('login')}
+            onClick={() => switchMode('login')}
           >
             <LogIn size={14} />
             <span>로그인</span>
@@ -80,14 +111,21 @@ export default function AuthPage({ onLoginSuccess, setPage }) {
           <button
             type="button"
             className={`auth-tab-btn ${mode === 'signup' ? 'active' : ''}`}
-            onClick={() => setMode('signup')}
+            onClick={() => switchMode('signup')}
           >
             <UserPlus size={14} />
             <span>회원가입</span>
           </button>
         </div>
 
-        {/* 1. 로그인 폼 디자인 */}
+        {alert && (
+          <div className={`auth-alert ${alert.type}`}>
+            {alert.type === 'error' ? <AlertCircle size={14} /> : <CheckCircle size={14} />}
+            <span>{alert.message}</span>
+          </div>
+        )}
+
+        {/* 1. 로그인 폼 */}
         {mode === 'login' && (
           <form className="auth-form" onSubmit={handleLoginSubmit}>
             <div className="form-group">
@@ -113,8 +151,8 @@ export default function AuthPage({ onLoginSuccess, setPage }) {
               />
             </div>
 
-            <button type="submit" className="dark-btn auth-submit-btn">
-              로그인
+            <button type="submit" className="dark-btn auth-submit-btn" disabled={isSubmitting}>
+              {isSubmitting ? '로그인 중...' : '로그인'}
             </button>
 
             {/* 빠른 테스트용 계정 안내 */}
@@ -124,16 +162,16 @@ export default function AuthPage({ onLoginSuccess, setPage }) {
                 <button
                   type="button"
                   className="demo-chip"
-                  onClick={() => fillDemoAccount('jiwoong@codeguard.ai', 'password123')}
+                  onClick={() => fillDemoAccount('admin@codeguard.com', 'password123')}
                 >
-                  지웅 (Frontend)
+                  관리자 (admin@codeguard.com)
                 </button>
                 <button
                   type="button"
                   className="demo-chip"
-                  onClick={() => fillDemoAccount('seoyeon@codeguard.ai', 'password123')}
+                  onClick={() => fillDemoAccount('developer1@codeguard.com', 'password123')}
                 >
-                  서연 (Backend)
+                  개발자 (developer1@codeguard.com)
                 </button>
               </div>
             </div>
@@ -143,7 +181,7 @@ export default function AuthPage({ onLoginSuccess, setPage }) {
               <button
                 type="button"
                 className="link-btn"
-                onClick={() => setMode('signup')}
+                onClick={() => switchMode('signup')}
               >
                 회원가입하기
               </button>
@@ -151,7 +189,7 @@ export default function AuthPage({ onLoginSuccess, setPage }) {
           </form>
         )}
 
-        {/* 2. 회원가입 폼 디자인 (직책 선택 제거됨) */}
+        {/* 2. 회원가입 폼 (직책 선택 없음 — 기본값으로 저장) */}
         {mode === 'signup' && (
           <form className="auth-form" onSubmit={handleSignupSubmit}>
             <div className="form-group">
@@ -207,8 +245,8 @@ export default function AuthPage({ onLoginSuccess, setPage }) {
               />
             </div>
 
-            <button type="submit" className="dark-btn auth-submit-btn">
-              회원가입 완료
+            <button type="submit" className="dark-btn auth-submit-btn" disabled={isSubmitting}>
+              {isSubmitting ? '가입 진행 중...' : '회원가입 완료'}
             </button>
 
             <div className="auth-footer-link">
@@ -216,7 +254,7 @@ export default function AuthPage({ onLoginSuccess, setPage }) {
               <button
                 type="button"
                 className="link-btn"
-                onClick={() => setMode('login')}
+                onClick={() => switchMode('login')}
               >
                 로그인 화면으로
               </button>
