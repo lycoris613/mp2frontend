@@ -7,25 +7,9 @@ import { authApi } from '../api/authApi';
 const STORAGE_CURRENT_USER_KEY = 'codeguard_current_user';
 const STORAGE_TOKEN_KEY = 'codeguard_token';
 
-// 등록된 사용자 목록 가져오기 (백엔드 연동)
-export async function getRegisteredUsers() {
-  try {
-    const users = await authApi.getAllUsers();
-    return Array.isArray(users) ? users : [];
-  } catch (err) {
-    console.error('getRegisteredUsers error:', err);
-    return [];
-  }
-}
-
 // 신규 회원 등록 (회원가입 백엔드 연동)
 export async function registerUser({ name, email, password, role = 'Developer' }) {
-  const result = await authApi.signup({
-    email,
-    password,
-    name,
-    role,
-  });
+  const result = await authApi.signup({ email, password });
 
   return {
     id: result.id,
@@ -35,25 +19,23 @@ export async function registerUser({ name, email, password, role = 'Developer' }
   };
 }
 
-// 로그인 인증 검사 (백엔드 연동)
+// 로그인 인증 (백엔드 JWT 발급)
 export async function authenticateUser(email, password) {
-  // 백엔드에서 이메일로 사용자 조회
-  const user = await authApi.getUserByEmail(email);
-  if (!user) {
-    throw new Error('등록되지 않은 사용자입니다.');
+  const result = await authApi.login({ email, password });
+  if (!result?.accessToken) {
+    throw new Error('로그인 응답에 토큰이 없습니다.');
   }
 
-  // 백엔드 응답을 바탕으로 세션 유저 객체 구성
+  // 백엔드는 이름/직책을 내려주지 않으므로 이메일 기반으로 세션 유저 구성
   const sessionUser = {
-    id: user.id,
-    name: user.name || user.email.split('@')[0],
-    email: user.email,
-    role: user.role || 'Developer',
+    id: result.id,
+    name: result.email.split('@')[0],
+    email: result.email,
+    role: 'Developer',
   };
 
   localStorage.setItem(STORAGE_CURRENT_USER_KEY, JSON.stringify(sessionUser));
-  // 가상 토큰 또는 세션 토큰 보관
-  localStorage.setItem(STORAGE_TOKEN_KEY, `user_token_${user.id}`);
+  localStorage.setItem(STORAGE_TOKEN_KEY, result.accessToken);
   return sessionUser;
 }
 
