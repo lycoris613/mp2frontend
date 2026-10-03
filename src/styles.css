@@ -1179,14 +1179,11 @@ button {
   cursor: pointer;
 }
 
-/* 단일 라인 취약점 블럭 */
 .code-line.vuln-line-highlight.vuln-block-single {
   border-radius: 4px;
   margin: 1px 10px;
 }
 
-/* 다중 라인 취약점: 하나의 연결된 단일 블럭으로 표시 */
-/* 1) 시작 라인: 상단 모서리 라운딩, 하단 테두리/마진 제거 */
 .code-line.vuln-line-highlight.vuln-block-start {
   border-bottom: none !important;
   border-top-left-radius: 4px;
@@ -1197,7 +1194,6 @@ button {
   margin-bottom: 0 !important;
 }
 
-/* 2) 중간 라인: 좌우 테두리만 유지, 상하 테두리/마진/라운딩 제거 */
 .code-line.vuln-line-highlight.vuln-block-middle {
   border-top: none !important;
   border-bottom: none !important;
@@ -1206,7 +1202,6 @@ button {
   margin-bottom: 0 !important;
 }
 
-/* 3) 종료 라인: 하단 모서리 라운딩, 상단 테두리/마진 제거 */
 .code-line.vuln-line-highlight.vuln-block-end {
   border-top: none !important;
   border-top-left-radius: 0;
@@ -1223,7 +1218,6 @@ button {
   border-color: var(--critical);
 }
 
-/* 현재 포커스/선택된 취약 라인 (더 진한 단일 블럭 하이라이트) */
 .code-line.vuln-active-highlight {
   border: 2px solid var(--critical) !important;
   background: rgba(248, 113, 113, 0.3) !important;

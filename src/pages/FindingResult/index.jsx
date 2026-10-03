@@ -1090,6 +1090,7 @@ export default function FindingResultPage({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            fontSize: '12px',
             color: 'var(--text-2)',
           }}
         >
