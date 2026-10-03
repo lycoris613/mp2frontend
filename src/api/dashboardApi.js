@@ -3,8 +3,15 @@
  * 실제 Spring Boot 백엔드(/api/v1/analyses) 연동
  */
 import apiClient from './client.js';
+import { analysisApi } from './analysisApi.js';
+import { findingApi } from './findingApi.js';
+import { scopedKey, isAnalysisVisibleToCurrentAccount } from '../utils/accountScope.js';
 
 const STORAGE_RESOLVED_ANALYSIS_IDS = 'codeguard_resolved_analysis_ids';
+
+// 유형별 집계 조회 시 최대 몇 개의 분석까지 상세 조회할지 (요청 폭주 방지)
+const MAX_TYPE_LOOKUPS = 30;
+const typeCountCache = new Map();
 
 const getStorageArray = (key) => {
   if (typeof window === 'undefined' || !window.localStorage) return [];
@@ -17,7 +24,68 @@ const getStorageArray = (key) => {
 };
 
 const getResolvedAnalysisIds = () => {
-  return getStorageArray(STORAGE_RESOLVED_ANALYSIS_IDS);
+  return getStorageArray(scopedKey(STORAGE_RESOLVED_ANALYSIS_IDS));
+};
+
+const normalizeList = (response) =>
+  Array.isArray(response)
+    ? response
+    : Array.isArray(response?.data)
+      ? response.data
+      : response?.content || response?.data?.content || [];
+
+// 백엔드 응답 필드명 차이(totalCount/totalFindings, criticalCount/severityCount.CRITICAL) 흡수
+const getTotalCount = (item) => Number(item.totalCount ?? item.totalFindings ?? 0);
+const getSeverityCount = (item, level) =>
+  Number(item[`${level.toLowerCase()}Count`] ?? item.severityCount?.[level] ?? 0);
+
+const addTypeCount = (map, type, count = 1) => {
+  if (!type) return;
+  map[type] = (map[type] || 0) + count;
+};
+
+/** 목록 응답에 이미 유형 정보가 있으면 바로 집계, 없으면 null */
+const readTypeCountsFromItem = (item) => {
+  const map = {};
+  if (Array.isArray(item.typeCount) && item.typeCount.length > 0) {
+    item.typeCount.forEach((t) => addTypeCount(map, t.type, Number(t.count || 0)));
+    return map;
+  }
+  if (Array.isArray(item.vulnerabilities) && item.vulnerabilities.length > 0) {
+    item.vulnerabilities.forEach((v) => addTypeCount(map, v.type || v.vulnerabilityType));
+    return map;
+  }
+  return null;
+};
+
+/** 분석 상세(typeCount) → 취약점 목록 순으로 조회해 유형별 건수 계산 (분석ID별 캐시) */
+const fetchTypeCounts = async (analysisId) => {
+  const key = String(analysisId);
+  if (typeCountCache.has(key)) return typeCountCache.get(key);
+
+  let map = null;
+  try {
+    const detail = await analysisApi.getAnalysisDetail(analysisId);
+    if (Array.isArray(detail?.typeCount) && detail.typeCount.length > 0) {
+      map = {};
+      detail.typeCount.forEach((t) => addTypeCount(map, t.type, Number(t.count || 0)));
+    }
+  } catch {
+    // 상세 조회 실패 시 취약점 목록으로 대체
+  }
+  if (!map) {
+    try {
+      const findings = await findingApi.getFindings(analysisId);
+      if (Array.isArray(findings) && findings.length > 0) {
+        map = {};
+        findings.forEach((f) => addTypeCount(map, f.vulnerabilityType || f.type));
+      }
+    } catch {
+      // 유형 정보를 얻지 못하면 집계에서 제외
+    }
+  }
+  if (map) typeCountCache.set(key, map);
+  return map;
 };
 
 /**
@@ -25,7 +93,7 @@ const getResolvedAnalysisIds = () => {
  */
 const isAnalysisFullyResolved = (item, resolvedAnalysisIds) => {
   const aId = Number(item.analysisId || item.id);
-  const totalCount = Number(item.totalCount || 0);
+  const totalCount = getTotalCount(item);
 
   // 1) 기본 검출 취약점이 0개이면 무조건 제외
   if (totalCount <= 0) return true;
@@ -74,11 +142,8 @@ export const dashboardApi = {
    */
   getDashboardSummary: async () => {
     const response = await apiClient.get('/analyses');
-    const rawList = Array.isArray(response)
-      ? response
-      : Array.isArray(response?.data)
-        ? response.data
-        : response?.content || [];
+    // 현재 로그인 계정의 분석만 집계
+    const rawList = normalizeList(response).filter(isAnalysisVisibleToCurrentAccount);
 
     const resolvedAnalysisIds = getResolvedAnalysisIds();
 
@@ -99,42 +164,48 @@ export const dashboardApi = {
       (item) => !isAnalysisFullyResolved(item, resolvedAnalysisIds)
     );
 
+    const needTypeLookup = [];
     activeList.forEach((item) => {
-      totalFindings += item.totalCount || 0;
-      criticalCount += item.criticalCount || 0;
-      highCount += item.highCount || 0;
-      mediumCount += item.mediumCount || 0;
-      lowCount += item.lowCount || 0;
+      totalFindings += getTotalCount(item);
+      criticalCount += getSeverityCount(item, 'CRITICAL');
+      highCount += getSeverityCount(item, 'HIGH');
+      mediumCount += getSeverityCount(item, 'MEDIUM');
+      lowCount += getSeverityCount(item, 'LOW');
 
-      if (Array.isArray(item.vulnerabilities)) {
-        item.vulnerabilities.forEach((v) => {
-          if (v.type && vulnTypeMap[v.type] !== undefined) {
-            vulnTypeMap[v.type] += 1;
-          } else if (v.type) {
-            vulnTypeMap[v.type] = (vulnTypeMap[v.type] || 0) + 1;
-          }
-        });
+      const typeMap = readTypeCountsFromItem(item);
+      if (typeMap) {
+        Object.entries(typeMap).forEach(([t, c]) => addTypeCount(vulnTypeMap, t, c));
+      } else {
+        needTypeLookup.push(item.analysisId || item.id);
       }
+    });
+
+    // 목록 응답에 유형 정보가 없는 분석은 상세/취약점 API로 실제 값을 조회
+    const lookups = await Promise.all(
+      needTypeLookup.slice(0, MAX_TYPE_LOOKUPS).map((id) => fetchTypeCounts(id))
+    );
+    lookups.forEach((typeMap) => {
+      if (typeMap) Object.entries(typeMap).forEach(([t, c]) => addTypeCount(vulnTypeMap, t, c));
     });
 
     const recentProjects = activeList.slice(0, 5).map((item) => ({
       id: item.analysisId || item.id,
       name: item.title || `분석 #${item.analysisId}`,
-      meta: `${item.language || 'Code'} · ${item.totalCount || 0}개 취약점 탐지`,
+      meta: `${item.language || 'Code'} · ${getTotalCount(item)}개 취약점 탐지`,
       risk:
-        item.criticalCount > 0
+        getSeverityCount(item, 'CRITICAL') > 0
           ? '치명적'
-          : item.highCount > 0
+          : getSeverityCount(item, 'HIGH') > 0
             ? '높음'
-            : item.mediumCount > 0
+            : getSeverityCount(item, 'MEDIUM') > 0
               ? '보통'
               : '안전',
       tone:
-        item.criticalCount > 0
+        getSeverityCount(item, 'CRITICAL') > 0
           ? 'danger'
-          : item.highCount > 0
+          : getSeverityCount(item, 'HIGH') > 0
             ? 'warn'
-            : item.mediumCount > 0
+            : getSeverityCount(item, 'MEDIUM') > 0
               ? 'moderate'
               : 'clean',
       updatedAt: item.createdAt ? String(item.createdAt).substring(0, 10) : '최근',
@@ -160,11 +231,7 @@ export const dashboardApi = {
    */
   getAnalyses: async (params = {}) => {
     const response = await apiClient.get('/analyses', { params });
-    const rawList = Array.isArray(response)
-      ? response
-      : Array.isArray(response?.data)
-        ? response.data
-        : response?.content || [];
+    const rawList = normalizeList(response).filter(isAnalysisVisibleToCurrentAccount);
 
     const resolvedAnalysisIds = getResolvedAnalysisIds();
 
@@ -180,18 +247,18 @@ export const dashboardApi = {
       project: item.title || `분석 #${item.analysisId}`,
       title: item.title || `분석 #${item.analysisId}`,
       vulnerability:
-        item.totalCount !== undefined
-          ? `${item.totalCount}개 취약점 탐지 (${item.status || '완료'})`
+        (item.totalCount ?? item.totalFindings) !== undefined
+          ? `${getTotalCount(item)}개 취약점 탐지 (${item.status || '완료'})`
           : '취약점 분석 완료',
-      totalCount: item.totalCount || 0,
+      totalCount: getTotalCount(item),
       severity:
-        item.criticalCount > 0
+        getSeverityCount(item, 'CRITICAL') > 0
           ? 'CRITICAL'
-          : item.highCount > 0
+          : getSeverityCount(item, 'HIGH') > 0
             ? 'HIGH'
-            : item.mediumCount > 0
+            : getSeverityCount(item, 'MEDIUM') > 0
               ? 'MEDIUM'
-              : item.lowCount > 0
+              : getSeverityCount(item, 'LOW') > 0
                 ? 'LOW'
                 : 'LOW',
       date: item.createdAt
@@ -238,7 +305,7 @@ export const dashboardApi = {
       // 로컬 해결 목록에도 등록하여 확실히 제거
       const current = getResolvedAnalysisIds();
       window.localStorage?.setItem(
-        STORAGE_RESOLVED_ANALYSIS_IDS,
+        scopedKey(STORAGE_RESOLVED_ANALYSIS_IDS),
         JSON.stringify([...new Set([...current, Number(id)])])
       );
       return { success: true, id };

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { defaultAnalysisConfig, detectLanguage } from '../../../data/analysisData';
+import { estimateAnalysis } from '../../../utils/analysisEstimate';
 
 /**
  * 분석 범위 및 설정 패널
@@ -8,11 +9,13 @@ import { defaultAnalysisConfig, detectLanguage } from '../../../data/analysisDat
  * @param {function} onStartAnalysis - 분석 시작 콜백
  * @param {string} selectedFile - 현재 선택된 파일명
  * @param {Array|string} codeContent - 현재 선택된 파일 코드 내용
+ * @param {Object} fileContents - 분석 요청에 담기는 전체 파일 내용 (예상 분석 시간 계산용)
  */
 export default function AnalysisSettingsPanel({
   onStartAnalysis,
   selectedFile = 'users.ts',
   codeContent = [],
+  fileContents = {},
 }) {
   const [title, setTitle] = useState(defaultAnalysisConfig.title);
   const [scope, setScope] = useState(defaultAnalysisConfig.scope);
@@ -27,6 +30,8 @@ export default function AnalysisSettingsPanel({
       )
     );
   };
+
+  const estimate = useMemo(() => estimateAnalysis(fileContents), [fileContents]);
 
   const isAnyRuleChecked = rules.some((r) => r.checked);
   const canStart = isAnyRuleChecked && langInfo.isSupported;
@@ -134,8 +139,8 @@ export default function AnalysisSettingsPanel({
       {/* 예상 분석 시간 */}
       <div className="estimate-card">
         <span className="estimate-label">예상 분석 시간</span>
-        <b className="estimate-value">{defaultAnalysisConfig.estimatedTime}</b>
-        <small className="estimate-meta">{defaultAnalysisConfig.estimatedMeta}</small>
+        <b className="estimate-value">{estimate.time}</b>
+        <small className="estimate-meta">{estimate.meta}</small>
       </div>
 
       {/* 취약점 분석 시작 버튼 */}

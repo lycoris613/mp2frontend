@@ -1,3 +1,4 @@
+import { scopedKey } from '../utils/accountScope.js';
 /**
  * 취약점 분석 결과 (SCR-003) 관련 Mock 데이터
  * image/결과화면.png 와이어프레임 최신본 준수
@@ -1422,14 +1423,14 @@ export function normalizeProjectId(rawProjectId) {
 
   // localStorage에 저장된 커스텀 프로젝트 확인
   try {
-    const saved = localStorage.getItem('codeguard_custom_projects');
+    const saved = localStorage.getItem(scopedKey('codeguard_custom_projects'));
     if (saved) {
       const customList = JSON.parse(saved);
       const match = customList.find((p) => p.id === str || p.name === str);
       if (match) {
         // PROJECTS_DATA에 없는 경우 빈 프로젝트 구조로 메모리 등록
         if (!PROJECTS_DATA[match.id]) {
-          const treeSaved = localStorage.getItem(`codeguard_tree_${match.id}`);
+          const treeSaved = localStorage.getItem(scopedKey(`codeguard_tree_${match.id}`));
           PROJECTS_DATA[match.id] = {
             id: match.id,
             name: match.name,

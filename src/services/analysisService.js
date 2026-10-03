@@ -6,6 +6,8 @@
 import { analysisApi } from '../api/analysisApi.js';
 import { findingApi } from '../api/findingApi.js';
 import { detectLanguage } from '../utils/language.js';
+import { isAnalyzableFile } from '../utils/analysisEstimate.js';
+import { registerAnalysisOwner } from '../utils/accountScope.js';
 import {
   PROJECTS_DATA,
   normalizeProjectId,
@@ -440,10 +442,7 @@ export async function executeAnalysis({
   const activeRules = rules.filter((r) => r.checked).map((r) => r.id);
 
   const validFiles = Object.keys(fileContents)
-    .filter((name) => {
-      const ext = name.split('.').pop()?.toLowerCase();
-      return ['ts', 'tsx', 'js', 'jsx', 'java', 'py', 'html', 'htm'].includes(ext);
-    })
+    .filter(isAnalyzableFile)
     .map((name) => ({
       relativePath: name,
       content: Array.isArray(fileContents[name])
@@ -487,6 +486,9 @@ export async function executeAnalysis({
   if (!analysisId) {
     throw new Error('백엔드에서 analysisId를 반환하지 않았습니다.');
   }
+
+  // 이 분석을 생성한 계정 기록 (계정별 대시보드/목록 분리)
+  registerAnalysisOwner(analysisId);
 
   // 백엔드 분석 엔진 완료 대기
   await waitForAnalysisComplete(analysisId);

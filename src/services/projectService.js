@@ -1,10 +1,12 @@
 import { PROJECTS_DATA } from '../data/findingData';
 import { getLocalCodeBaseDir, writeToLocalCode } from './localCodeSyncService';
+import { scopedKey } from '../utils/accountScope';
 
 export const CUSTOM_PROJECTS_KEY = 'codeguard_custom_projects';
 export const PROJECT_TREE_STORAGE_PREFIX = 'codeguard_tree_';
 export const DELETED_PROJECTS_KEY = 'codeguard_deleted_projects';
 export const RENAMED_PROJECTS_KEY = 'codeguard_renamed_projects';
+export const FAVORITE_PROJECTS_KEY = 'codeguard_favorite_projects';
 
 export const BASE_PROJECTS = [
   { id: 'payments-api', name: 'payments-api', description: '결제 트랜잭션 및 금융 API 서비스' },
@@ -17,7 +19,7 @@ export const BASE_PROJECTS = [
  */
 export function getDeletedProjectIds() {
   try {
-    const saved = localStorage.getItem(DELETED_PROJECTS_KEY);
+    const saved = localStorage.getItem(scopedKey(DELETED_PROJECTS_KEY));
     return saved ? JSON.parse(saved) : [];
   } catch (e) {
     return [];
@@ -29,7 +31,7 @@ export function getDeletedProjectIds() {
  */
 export function getRenamedProjectsMap() {
   try {
-    const saved = localStorage.getItem(RENAMED_PROJECTS_KEY);
+    const saved = localStorage.getItem(scopedKey(RENAMED_PROJECTS_KEY));
     return saved ? JSON.parse(saved) : {};
   } catch (e) {
     return {};
@@ -41,7 +43,7 @@ export function getRenamedProjectsMap() {
  */
 export function getCustomProjects() {
   try {
-    const saved = localStorage.getItem(CUSTOM_PROJECTS_KEY);
+    const saved = localStorage.getItem(scopedKey(CUSTOM_PROJECTS_KEY));
     if (saved) {
       return JSON.parse(saved);
     }
@@ -92,8 +94,7 @@ export function getAllProjects() {
  */
 export function saveCustomProjectTree(projectId, treeData) {
   try {
-    localStorage.setItem(
-      `${PROJECT_TREE_STORAGE_PREFIX}${projectId}`,
+    localStorage.setItem(scopedKey(`${PROJECT_TREE_STORAGE_PREFIX}${projectId}`),
       JSON.stringify(treeData)
     );
   } catch (e) {
@@ -106,7 +107,7 @@ export function saveCustomProjectTree(projectId, treeData) {
  */
 export function getCustomProjectTree(projectId) {
   try {
-    const saved = localStorage.getItem(`${PROJECT_TREE_STORAGE_PREFIX}${projectId}`);
+    const saved = localStorage.getItem(scopedKey(`${PROJECT_TREE_STORAGE_PREFIX}${projectId}`));
     if (saved) {
       return JSON.parse(saved);
     }
@@ -172,7 +173,7 @@ export async function createNewEmptyProject({ name, description = '', createSrcF
   // 2. localStorage에 커스텀 프로젝트 목록 및 트리 저장
   const customList = getCustomProjects();
   customList.push(newProject);
-  localStorage.setItem(CUSTOM_PROJECTS_KEY, JSON.stringify(customList));
+  localStorage.setItem(scopedKey(CUSTOM_PROJECTS_KEY), JSON.stringify(customList));
   saveCustomProjectTree(cleanId, initialTree);
 
   // 3. 로컬 파일 시스템에 프로젝트 기본 폴더/파일 생성 (Vite 미들웨어 연동)
@@ -200,12 +201,24 @@ export async function createNewEmptyProject({ name, description = '', createSrcF
   return newProject;
 }
 
+// 현재 계정의 커스텀 프로젝트로 PROJECTS_DATA에 등록해 둔 ID들
+const registeredCustomIds = new Set();
+
 /**
  * 커스텀 프로젝트를 PROJECTS_DATA 메모리에 초기 등록 (앱 시작 시 호출)
  */
 export function initCustomProjectsInMemory() {
   const custom = getCustomProjects();
+  const customIds = new Set(custom.map((p) => p.id));
+
+  // 이전에 로그인했던 계정의 커스텀 프로젝트가 메모리에 남지 않도록 정리
+  registeredCustomIds.forEach((id) => {
+    if (!customIds.has(id)) delete PROJECTS_DATA[id];
+  });
+  registeredCustomIds.clear();
+
   custom.forEach((p) => {
+    registeredCustomIds.add(p.id);
     if (!PROJECTS_DATA[p.id]) {
       const savedTree = getCustomProjectTree(p.id) || [];
       PROJECTS_DATA[p.id] = {
@@ -247,12 +260,12 @@ export async function renameProject(oldProjectId, newName) {
   if (customIdx >= 0) {
     customList[customIdx].id = cleanNewId;
     customList[customIdx].name = cleanNewId;
-    localStorage.setItem(CUSTOM_PROJECTS_KEY, JSON.stringify(customList));
+    localStorage.setItem(scopedKey(CUSTOM_PROJECTS_KEY), JSON.stringify(customList));
   } else {
     // 기본 프로젝트 이름 변경 기록
     const renamedMap = getRenamedProjectsMap();
     renamedMap[oldProjectId] = { id: cleanNewId, name: cleanNewId };
-    localStorage.setItem(RENAMED_PROJECTS_KEY, JSON.stringify(renamedMap));
+    localStorage.setItem(scopedKey(RENAMED_PROJECTS_KEY), JSON.stringify(renamedMap));
   }
 
   // 2. 트리 데이터 스토리지 마이그레이션
@@ -262,7 +275,7 @@ export async function renameProject(oldProjectId, newName) {
     [];
   saveCustomProjectTree(cleanNewId, oldTree);
   if (cleanNewId !== oldProjectId) {
-    localStorage.removeItem(`${PROJECT_TREE_STORAGE_PREFIX}${oldProjectId}`);
+    localStorage.removeItem(scopedKey(`${PROJECT_TREE_STORAGE_PREFIX}${oldProjectId}`));
   }
 
   // 3. PROJECTS_DATA 메모리 캐시 갱신
@@ -288,12 +301,12 @@ export async function renameProject(oldProjectId, newName) {
 
   // 4. 즐겨찾기 목록 동기화
   try {
-    const favSaved = localStorage.getItem('codeguard_favorite_projects');
+    const favSaved = localStorage.getItem(scopedKey(FAVORITE_PROJECTS_KEY));
     if (favSaved) {
       const favs = JSON.parse(favSaved);
       if (favs.includes(oldProjectId)) {
         const nextFavs = favs.map((id) => (id === oldProjectId ? cleanNewId : id));
-        localStorage.setItem('codeguard_favorite_projects', JSON.stringify(nextFavs));
+        localStorage.setItem(scopedKey(FAVORITE_PROJECTS_KEY), JSON.stringify(nextFavs));
         window.dispatchEvent(new Event('codeguard_favorites_changed'));
       }
     }
@@ -317,26 +330,26 @@ export async function deleteProject(projectId) {
   // 1. 커스텀 프로젝트 목록에서 제거
   const customList = getCustomProjects();
   const nextCustom = customList.filter((p) => p.id !== projectId);
-  localStorage.setItem(CUSTOM_PROJECTS_KEY, JSON.stringify(nextCustom));
+  localStorage.setItem(scopedKey(CUSTOM_PROJECTS_KEY), JSON.stringify(nextCustom));
 
   // 2. 삭제 목록에 추가 (기본 프로젝트도 삭제/숨김 지원)
   const deletedIds = getDeletedProjectIds();
   if (!deletedIds.includes(projectId)) {
     deletedIds.push(projectId);
-    localStorage.setItem(DELETED_PROJECTS_KEY, JSON.stringify(deletedIds));
+    localStorage.setItem(scopedKey(DELETED_PROJECTS_KEY), JSON.stringify(deletedIds));
   }
 
   // 3. 트리 및 캐시 정리
-  localStorage.removeItem(`${PROJECT_TREE_STORAGE_PREFIX}${projectId}`);
+  localStorage.removeItem(scopedKey(`${PROJECT_TREE_STORAGE_PREFIX}${projectId}`));
   delete PROJECTS_DATA[projectId];
 
   // 4. 즐겨찾기 목록에서 제거
   try {
-    const favSaved = localStorage.getItem('codeguard_favorite_projects');
+    const favSaved = localStorage.getItem(scopedKey(FAVORITE_PROJECTS_KEY));
     if (favSaved) {
       const favs = JSON.parse(favSaved);
       const nextFavs = favs.filter((id) => id !== projectId);
-      localStorage.setItem('codeguard_favorite_projects', JSON.stringify(nextFavs));
+      localStorage.setItem(scopedKey(FAVORITE_PROJECTS_KEY), JSON.stringify(nextFavs));
       window.dispatchEvent(new Event('codeguard_favorites_changed'));
     }
   } catch (e) {

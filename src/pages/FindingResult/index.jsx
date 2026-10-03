@@ -31,6 +31,7 @@ import {
 import LocalPathConfigModal from '../../components/common/LocalPathConfigModal';
 import { insertNodeIntoTreeHierarchy } from '../../utils/fileTreeHelper';
 import { PAGES } from '../../constants/navigation';
+import { scopedKey } from '../../utils/accountScope';
 import { AlertCircle, ArrowRight, RotateCcw, CheckCircle, ShieldAlert, Layers, FolderSync, HardDrive, FolderCog } from 'lucide-react';
 
 const STORAGE_PREFIX_RESOLVED = 'codeguard_resolved_finding_ids';
@@ -408,9 +409,9 @@ export default function FindingResultPage({
     //      -> 분석 결과 목록(/analyses/list) 및 대시보드 최근 분석에 즉시 다시 노출 복구!
     if (targetAnalysisId) {
       const aId = Number(targetAnalysisId);
-      const resolvedAnalyses = JSON.parse(localStorage.getItem('codeguard_resolved_analysis_ids') || '[]');
+      const resolvedAnalyses = JSON.parse(localStorage.getItem(scopedKey('codeguard_resolved_analysis_ids')) || '[]');
       const updatedResolved = resolvedAnalyses.filter((id) => Number(id) !== aId);
-      localStorage.setItem('codeguard_resolved_analysis_ids', JSON.stringify(updatedResolved));
+      localStorage.setItem(scopedKey('codeguard_resolved_analysis_ids'), JSON.stringify(updatedResolved));
     }
 
     // 5-9. 로컬 컴퓨터(C:\Users\user\Documents\code\{targetProject})의 실제 파일들도 원래 취약점 코드로 즉시 저장 동기화!
@@ -918,9 +919,9 @@ export default function FindingResultPage({
 
     if (isAllAnalysisResolved && currentAnalysisRun?.analysisId) {
       const aId = Number(currentAnalysisRun.analysisId);
-      const currentList = JSON.parse(localStorage.getItem('codeguard_resolved_analysis_ids') || '[]');
+      const currentList = JSON.parse(localStorage.getItem(scopedKey('codeguard_resolved_analysis_ids')) || '[]');
       if (!currentList.map(Number).includes(aId)) {
-        localStorage.setItem('codeguard_resolved_analysis_ids', JSON.stringify([...currentList, aId]));
+        localStorage.setItem(scopedKey('codeguard_resolved_analysis_ids'), JSON.stringify([...currentList, aId]));
       }
       setShowAllResolvedToast(true);
       setTimeout(() => setShowAllResolvedToast(false), 5000);

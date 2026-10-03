@@ -24,8 +24,7 @@ import {
   deleteProject,
 } from '../../services/projectService';
 import AddProjectModal from '../common/AddProjectModal';
-
-initCustomProjectsInMemory();
+import { scopedKey } from '../../utils/accountScope';
 
 const FAVORITES_STORAGE_KEY = 'codeguard_favorite_projects';
 const DEFAULT_FAVORITES = ['payments-api'];
@@ -62,7 +61,11 @@ export default function Sidebar({ currentUser = null, onLogout }) {
   }
 
   // 3) 프로젝트 목록 상태 (커스텀 프로젝트 동적 반영)
-  const [projectsList, setProjectsList] = useState(() => getAllProjects());
+  const [projectsList, setProjectsList] = useState(() => {
+    // 현재 로그인 계정의 커스텀 프로젝트를 메모리에 등록한 뒤 목록 구성 (계정 전환 시 이전 계정 데이터 정리)
+    initCustomProjectsInMemory();
+    return getAllProjects();
+  });
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // 4) 검색 및 필터 상태
@@ -74,7 +77,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
   // 5) 즐겨찾기 프로젝트 목록 상태 (localStorage 연동)
   const [favorites, setFavorites] = useState(() => {
     try {
-      const saved = localStorage.getItem(FAVORITES_STORAGE_KEY);
+      const saved = localStorage.getItem(scopedKey(FAVORITES_STORAGE_KEY));
       if (saved) {
         return JSON.parse(saved);
       }
@@ -136,7 +139,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
   useEffect(() => {
     const handleStorageChange = () => {
       try {
-        const saved = localStorage.getItem(FAVORITES_STORAGE_KEY);
+        const saved = localStorage.getItem(scopedKey(FAVORITES_STORAGE_KEY));
         if (saved) {
           setFavorites(JSON.parse(saved));
         }
@@ -165,7 +168,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
         ? prev.filter((id) => id !== normId)
         : [...prev, normId];
       try {
-        localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(next));
+        localStorage.setItem(scopedKey(FAVORITES_STORAGE_KEY), JSON.stringify(next));
         window.dispatchEvent(new Event('codeguard_favorites_changed'));
       } catch (e) {
         console.warn('Failed to save favorites to localStorage', e);

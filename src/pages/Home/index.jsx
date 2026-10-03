@@ -101,7 +101,6 @@ export default function HomePage({ setPage, currentUser, onLogin, onLogout }) {
             }}
           />
           <VulnerabilityPieChart
-            totalCount={summary?.totalFindings || 0}
             vulnTypeMap={summary?.vulnTypeMap || {}}
           />
         </div>

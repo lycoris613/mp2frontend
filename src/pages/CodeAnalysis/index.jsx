@@ -5,6 +5,7 @@ import FileTree from '../../components/common/FileTree';
 import CodeViewer from '../../components/common/CodeViewer';
 import AnalysisSettingsPanel from './components/AnalysisSettingsPanel';
 import AnalysisProgressPanel from './components/AnalysisProgressPanel';
+import { scopedKey } from '../../utils/accountScope';
 import {
   PROJECTS_DATA,
   normalizeProjectId,
@@ -87,7 +88,7 @@ export default function CodeAnalysisPage({ setPage, currentUser, onLogin, onLogo
   // 커스텀 프로젝트인 경우 트리 변경 시 로컬 스토리지에 지속 저장
   useEffect(() => {
     const customList = JSON.parse(
-      localStorage.getItem('codeguard_custom_projects') || '[]'
+      localStorage.getItem(scopedKey('codeguard_custom_projects')) || '[]'
     );
     if (customList.some((p) => p.id === currentProjectId)) {
       saveCustomProjectTree(currentProjectId, treeData);
@@ -412,6 +413,7 @@ export default function CodeAnalysisPage({ setPage, currentUser, onLogin, onLogo
           onStartAnalysis={handleStartAnalysis}
           selectedFile={selectedFile}
           codeContent={fileContents[selectedFile] || []}
+          fileContents={fileContents}
         />
       </div>
 

@@ -90,8 +90,6 @@ export const defaultAnalysisConfig = {
     { id: 'HARDCODED_SECRET', label: '하드코딩된 비밀정보', checked: true },
     { id: 'XSS', label: 'XSS', checked: true },
   ],
-  estimatedTime: '약 20초',
-  estimatedMeta: '1개 파일 · 31줄',
 };
 
 // 하위 호환용 flat 리스트
