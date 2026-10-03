@@ -29,7 +29,7 @@ export const useAnalysisStore = create((set, get) => ({
     set({ listLoading: true, error: null });
     try {
       const data = await analysisApi.getAnalyses(params);
-      const list = Array.isArray(data) ? data : data.content || [];
+      const list = Array.isArray(data) ? data : data?.content || data?.data || [];
       set({ analyses: list, listLoading: false });
       return list;
     } catch (err) {

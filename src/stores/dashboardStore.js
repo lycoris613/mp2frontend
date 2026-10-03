@@ -59,7 +59,7 @@ export const useDashboardStore = create((set, get) => ({
     try {
       const { filters } = get();
       const res = await dashboardApi.getAnalyses(filters);
-      let list = res.data || [];
+      let list = Array.isArray(res) ? res : res?.data || [];
 
       // 정렬 처리
       if (filters.sortBy === 'severity') {

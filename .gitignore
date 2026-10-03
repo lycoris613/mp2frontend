@@ -2,7 +2,8 @@ node_modules
 dist
 .vscode
 .env
-note
+/note
 DEVELOPMENT_PLAN.md
 image
 Checklist.md
+test

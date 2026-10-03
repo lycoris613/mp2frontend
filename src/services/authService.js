@@ -1,98 +1,63 @@
 /**
- * 인증 및 회원 관리 서비스 (LocalStorage 기반 지속성 지원)
- * 05 React 컴포넌트 설계서 표 7-1(authStore) 준수
+ * 인증 및 회원 관리 서비스 (백엔드 REST API 연동)
  */
 
-const STORAGE_USERS_KEY = 'codeguard_registered_users';
+import { authApi } from '../api/authApi';
+
 const STORAGE_CURRENT_USER_KEY = 'codeguard_current_user';
+const STORAGE_TOKEN_KEY = 'codeguard_token';
 
-// 기본 등록된 초기 데모 계정 목록
-const INITIAL_DEMO_USERS = [
-  {
-    id: 1,
-    name: '지웅',
-    email: 'jiwoong@codeguard.ai',
-    password: 'password123',
-    role: 'Frontend / LLM',
-  },
-  {
-    id: 2,
-    name: '서연',
-    email: 'seoyeon@codeguard.ai',
-    password: 'password123',
-    role: 'Backend Engineer',
-  },
-];
-
-// 저장소에서 회원 목록 가져오기
-export function getRegisteredUsers() {
+// 등록된 사용자 목록 가져오기 (백엔드 연동)
+export async function getRegisteredUsers() {
   try {
-    const data = localStorage.getItem(STORAGE_USERS_KEY);
-    if (!data) {
-      localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(INITIAL_DEMO_USERS));
-      return INITIAL_DEMO_USERS;
-    }
-    const users = JSON.parse(data);
-    // 기존 캐시된 데이터가 있을 경우 서연 (Backend)으로 마이그레이션
-    const migrated = users.map((u) =>
-      u.name === '재훈' || u.email === 'jaehoon@codeguard.ai'
-        ? { ...u, name: '서연', email: 'seoyeon@codeguard.ai', role: 'Backend Engineer' }
-        : u
-    );
-    return migrated;
-  } catch {
-    return INITIAL_DEMO_USERS;
+    const users = await authApi.getAllUsers();
+    return Array.isArray(users) ? users : [];
+  } catch (err) {
+    console.error('getRegisteredUsers error:', err);
+    return [];
   }
 }
 
-// 신규 회원 등록 (회원 추가 기능)
-export function registerUser({ name, email, password, role = 'Developer' }) {
-  const users = getRegisteredUsers();
-  
-  // 이메일 중복 검사
-  const exists = users.some((u) => u.email.toLowerCase() === email.toLowerCase());
-  if (exists) {
-    throw new Error('이미 등록된 이메일 주소입니다.');
-  }
-
-  const newUser = {
-    id: Date.now(),
-    name: name.trim(),
-    email: email.trim(),
+// 신규 회원 등록 (회원가입 백엔드 연동)
+export async function registerUser({ name, email, password, role = 'Developer' }) {
+  const result = await authApi.signup({
+    email,
     password,
-    role: role.trim() || 'Developer',
-  };
+    name,
+    role,
+  });
 
-  const updatedUsers = [...users, newUser];
-  localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(updatedUsers));
-  return newUser;
+  return {
+    id: result.id,
+    email: result.email || email,
+    name: name || result.email || email,
+    role,
+  };
 }
 
-// 로그인 인증 검사
-export function authenticateUser(email, password) {
-  const users = getRegisteredUsers();
-  const user = users.find(
-    (u) =>
-      u.email.toLowerCase() === email.trim().toLowerCase() &&
-      u.password === password
-  );
-
+// 로그인 인증 검사 (백엔드 연동)
+export async function authenticateUser(email, password) {
+  // 백엔드에서 이메일로 사용자 조회
+  const user = await authApi.getUserByEmail(email);
   if (!user) {
-    throw new Error('이메일 또는 비밀번호가 올바르지 않습니다.');
+    throw new Error('등록되지 않은 사용자입니다.');
   }
 
+  // 백엔드 응답을 바탕으로 세션 유저 객체 구성
   const sessionUser = {
     id: user.id,
-    name: user.name,
+    name: user.name || user.email.split('@')[0],
     email: user.email,
-    role: user.role,
+    role: user.role || 'Developer',
   };
 
   localStorage.setItem(STORAGE_CURRENT_USER_KEY, JSON.stringify(sessionUser));
+  // 가상 토큰 또는 세션 토큰 보관
+  localStorage.setItem(STORAGE_TOKEN_KEY, `user_token_${user.id}`);
   return sessionUser;
 }
 
-// 현재 로그인된 세션 사용자 가져오기
+// 현재 로그인된 세션 사용자 가져오기 (새로고침 유지용)
 export function getCurrentSessionUser() {
   try {
     const data = localStorage.getItem(STORAGE_CURRENT_USER_KEY);
@@ -105,4 +70,5 @@ export function getCurrentSessionUser() {
 // 로그아웃 처리
 export function clearSessionUser() {
   localStorage.removeItem(STORAGE_CURRENT_USER_KEY);
+  localStorage.removeItem(STORAGE_TOKEN_KEY);
 }

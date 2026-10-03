@@ -29,38 +29,54 @@ export default function AuthPage({ onLoginSuccess, setPage }) {
     setAlert(null);
   };
 
-  // 로그인 버튼 클릭 시 — authService로 실제 자격 증명 검증
-  const handleLoginSubmit = (e) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 로그인 버튼 클릭 시 — authService로 백엔드 실제 사용자 검증
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
+    if (!loginEmail.trim()) {
+      setAlert({ type: 'error', message: '이메일을 입력해 주세요.' });
+      return;
+    }
+    setIsSubmitting(true);
     try {
-      const sessionUser = authenticateUser(loginEmail, loginPassword);
+      const sessionUser = await authenticateUser(loginEmail, loginPassword);
       setAlert(null);
       onLoginSuccess?.(sessionUser);
       setPage?.(PAGES.HOME);
     } catch (err) {
       setAlert({ type: 'error', message: err.message });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // 회원가입 버튼 클릭 시 — 신규 등록 후 로그인 탭으로 전환 (04 §3.5.4 준수)
-  const handleSignupSubmit = (e) => {
+  // 회원가입 버튼 클릭 시 — 백엔드 사용자 등록 후 로그인 탭으로 전환
+  const handleSignupSubmit = async (e) => {
     e.preventDefault();
     if (signupPassword !== signupConfirmPassword) {
       setAlert({ type: 'error', message: '비밀번호가 일치하지 않습니다.' });
       return;
     }
+    if (!signupEmail.trim() || !signupPassword) {
+      setAlert({ type: 'error', message: '이메일과 비밀번호를 모두 입력해 주세요.' });
+      return;
+    }
+    setIsSubmitting(true);
     try {
-      registerUser({ name: signupName, email: signupEmail, password: signupPassword });
+      await registerUser({ name: signupName, email: signupEmail, password: signupPassword });
       setLoginEmail(signupEmail);
       setLoginPassword('');
       setMode('login');
       setAlert({ type: 'success', message: '회원가입이 완료되었습니다. 로그인해 주세요.' });
     } catch (err) {
       setAlert({ type: 'error', message: err.message });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // 데모 계정 간편 입력
+  // 데모 계정 간편 입력 (백엔드 실제 계정)
   const fillDemoAccount = (email, pw) => {
     setLoginEmail(email);
     setLoginPassword(pw);
@@ -135,8 +151,8 @@ export default function AuthPage({ onLoginSuccess, setPage }) {
               />
             </div>
 
-            <button type="submit" className="dark-btn auth-submit-btn">
-              로그인
+            <button type="submit" className="dark-btn auth-submit-btn" disabled={isSubmitting}>
+              {isSubmitting ? '로그인 중...' : '로그인'}
             </button>
 
             {/* 빠른 테스트용 계정 안내 */}
@@ -146,16 +162,16 @@ export default function AuthPage({ onLoginSuccess, setPage }) {
                 <button
                   type="button"
                   className="demo-chip"
-                  onClick={() => fillDemoAccount('jiwoong@codeguard.ai', 'password123')}
+                  onClick={() => fillDemoAccount('admin@codeguard.com', 'password123')}
                 >
-                  지웅 (Frontend)
+                  관리자 (admin@codeguard.com)
                 </button>
                 <button
                   type="button"
                   className="demo-chip"
-                  onClick={() => fillDemoAccount('seoyeon@codeguard.ai', 'password123')}
+                  onClick={() => fillDemoAccount('developer1@codeguard.com', 'password123')}
                 >
-                  서연 (Backend)
+                  개발자 (developer1@codeguard.com)
                 </button>
               </div>
             </div>
@@ -229,8 +245,8 @@ export default function AuthPage({ onLoginSuccess, setPage }) {
               />
             </div>
 
-            <button type="submit" className="dark-btn auth-submit-btn">
-              회원가입 완료
+            <button type="submit" className="dark-btn auth-submit-btn" disabled={isSubmitting}>
+              {isSubmitting ? '가입 진행 중...' : '회원가입 완료'}
             </button>
 
             <div className="auth-footer-link">

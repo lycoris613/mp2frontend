@@ -116,7 +116,7 @@ export default function AnalysisListPage({ currentUser, onLogin, onLogout }) {
                 <div
                   key={item.id}
                   className="list-row"
-                  onClick={() => navigate(`/results/${item.project}`)}
+                  onClick={() => navigate(`/analyses?analysisId=${item.analysisId || item.id}`)}
                 >
                   <div>
                     <strong className="list-row-title">{item.project}</strong>

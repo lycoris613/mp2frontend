@@ -1,3 +1,4 @@
+import { scopedKey } from '../utils/accountScope.js';
 /**
  * 취약점 분석 결과 (SCR-003) 관련 Mock 데이터
  * image/결과화면.png 와이어프레임 최신본 준수
@@ -21,9 +22,15 @@ export const PROJECTS_DATA = {
       'payments.ts': 'src/routes/payments.ts',
       'database.ts': 'src/database.ts',
       'middleware.ts': 'src/middleware.ts',
+      'ai_scanner.py': 'src/scripts/ai_scanner.py',
+      'PaymentAuth.java': 'src/services/PaymentAuth.java',
+      'receipt_view.html': 'src/templates/receipt_view.html',
+      'legacy_crypto.js': 'src/utils/legacy_crypto.js',
       'config.ts': 'config.ts',
       'auth.ts': 'auth.ts',
       'package.json': 'package.json',
+      'custom_data.unknown': 'custom_data.unknown',
+      'config_module.xyz': 'config_module.xyz',
     },
     treeData: [
       {
@@ -40,6 +47,38 @@ export const PROJECTS_DATA = {
               { name: 'payments.ts', isDir: false, ext: 'TS', hasFinding: true },
             ],
           },
+          {
+            name: 'scripts',
+            isDir: true,
+            isOpen: true,
+            children: [
+              { name: 'ai_scanner.py', isDir: false, ext: 'PY', hasFinding: true },
+            ],
+          },
+          {
+            name: 'services',
+            isDir: true,
+            isOpen: true,
+            children: [
+              { name: 'PaymentAuth.java', isDir: false, ext: 'JAVA', hasFinding: true },
+            ],
+          },
+          {
+            name: 'templates',
+            isDir: true,
+            isOpen: true,
+            children: [
+              { name: 'receipt_view.html', isDir: false, ext: 'HTML', hasFinding: true },
+            ],
+          },
+          {
+            name: 'utils',
+            isDir: true,
+            isOpen: true,
+            children: [
+              { name: 'legacy_crypto.js', isDir: false, ext: 'JS', hasFinding: true },
+            ],
+          },
           { name: 'database.ts', isDir: false, ext: 'TS', hasFinding: false },
           { name: 'middleware.ts', isDir: false, ext: 'TS', hasFinding: false },
         ],
@@ -47,6 +86,8 @@ export const PROJECTS_DATA = {
       { name: 'config.ts', isDir: false, ext: 'TS', hasFinding: true },
       { name: 'auth.ts', isDir: false, ext: 'TS', hasFinding: true },
       { name: 'package.json', isDir: false, ext: 'JSON', hasFinding: false },
+      { name: 'custom_data.unknown', isDir: false, ext: 'FAIL', hasFinding: false },
+      { name: 'config_module.xyz', isDir: false, ext: 'FAIL', hasFinding: false },
     ],
     fileFindingData: {
       'users.ts': {
@@ -491,6 +532,196 @@ export const PROJECTS_DATA = {
         tagLabel: '',
         finding: null,
         diff: null,
+      },
+
+      // 1) Python 파일 (파이썬 언어 감지 테스트용)
+      'ai_scanner.py': {
+        hasFinding: true,
+        codeLines: [
+          'import os',
+          'import sqlite3',
+          '',
+          '# [기능 1] 사용자 검색 (취약점: SQL Injection)',
+          'def search_user(username):',
+          '    conn = sqlite3.connect("users.db")',
+          '    cursor = conn.cursor()',
+          '    query = f"SELECT * FROM users WHERE name = \'{username}\'"',
+          '    cursor.execute(query)',
+          '    return cursor.fetchall()',
+          '',
+          '# [기능 2] 마스터 시크릿 (취약점: Hardcoded Secret)',
+          'OPENAI_API_KEY = "sk-live-2026-python-secret-token-9988"',
+          '',
+          'def execute_ai_task():',
+          '    print("AI 모델 구동 중...")',
+        ],
+        vulnLineIndices: [7, 12],
+        tagLabel: 'Python · SQL Injection & Secret 탐지됨',
+        finding: {
+          id: 201,
+          vulnerabilityType: 'SQL_INJECTION',
+          severity: 'CRITICAL',
+          title: 'SQL 삽입 취약점 (Python SQLite)',
+          severityBadge: '치명적 98% · CWE-89',
+          cwe: 'CWE-89',
+          confidence: '98%',
+          status: 'OPEN',
+          line: 8,
+          vulnLineIndices: [7],
+          detectionSource: {
+            title: '탐지 근거 · 규칙 기반 (Rule-based)',
+            ruleId: 'PY-SQLI-001',
+            ruleTitle: 'Python F-String 동적 쿼리 조합',
+            matchedCode: 'query = f"SELECT * FROM users WHERE name = \'{username}\'"',
+          },
+          description: 'Python f-string을 사용하여 외부 입력값을 SQL 쿼리에 직접 연결하여 SQL 삽입 취약점이 발생합니다.',
+          recommendation: 'sqlite3의 ? 플레이스홀더를 사용하는 매개변수화된 쿼리로 변경하세요.',
+        },
+      },
+
+      // 2) Java 파일 (자바 언어 감지 테스트용)
+      'PaymentAuth.java': {
+        hasFinding: true,
+        codeLines: [
+          'package com.rookies6.payments;',
+          '',
+          'public class PaymentAuth {',
+          '    // [취약점: Hardcoded Secret]',
+          '    private String awsAccessKey = "AKIA_JAVA_PROD_SECRET_KEY_99";',
+          '',
+          '    // [취약점: XSS]',
+          '    public String generateWelcomeHtml(String clientName) {',
+          '        return "<div class=\'banner\'>환영합니다, " + clientName + "님!</div>";',
+          '    }',
+          '}',
+        ],
+        vulnLineIndices: [4, 8],
+        tagLabel: 'Java · Hardcoded Secret & XSS 탐지됨',
+        finding: {
+          id: 202,
+          vulnerabilityType: 'HARDCODED_SECRET',
+          severity: 'CRITICAL',
+          title: '하드코딩된 AWS 액세스 키 (Java)',
+          severityBadge: '치명적 99% · CWE-798',
+          cwe: 'CWE-798',
+          confidence: '99%',
+          status: 'OPEN',
+          line: 5,
+          vulnLineIndices: [4],
+          detectionSource: {
+            title: '탐지 근거 · 규칙 기반 (Rule-based)',
+            ruleId: 'SEC-001',
+            ruleTitle: 'AWS Secret Key 하드코딩 탐지',
+            matchedCode: 'private String awsAccessKey = "AKIA_JAVA_PROD_SECRET_KEY_99";',
+          },
+          description: 'AWS 액세스 키가 Java 클래스 변수에 평문으로 하드코딩되어 있습니다.',
+          recommendation: '환경 변수(System.getenv) 또는 AWS Secrets Manager를 사용하세요.',
+        },
+      },
+
+      // 3) HTML 파일 (HTML 언어 감지 테스트용)
+      'receipt_view.html': {
+        hasFinding: true,
+        codeLines: [
+          '<!DOCTYPE html>',
+          '<html>',
+          '<head><title>영수증 조회</title></head>',
+          '<body>',
+          '  <!-- [취약점: Reflected XSS] -->',
+          '  <div id="receipt-box">',
+          '    <h2>영수증 상세</h2>',
+          '    <script>document.write("구매자: " + location.hash);</script>',
+          '  </div>',
+          '</body>',
+          '</html>',
+        ],
+        vulnLineIndices: [7],
+        tagLabel: 'HTML · DOM Based XSS 탐지됨',
+        finding: {
+          id: 203,
+          vulnerabilityType: 'XSS',
+          severity: 'HIGH',
+          title: 'DOM 기반 크로스 사이트 스크립팅 (XSS)',
+          severityBadge: '높음 94% · CWE-79',
+          cwe: 'CWE-79',
+          confidence: '94%',
+          status: 'OPEN',
+          line: 8,
+          vulnLineIndices: [7],
+          detectionSource: {
+            title: '탐지 근거 · 규칙 기반 (Rule-based)',
+            ruleId: 'HTML-XSS-001',
+            ruleTitle: 'document.write를 통한 동적 스크립트 실행',
+            matchedCode: '<script>document.write("구매자: " + location.hash);</script>',
+          },
+          description: 'location.hash 값을 검증 없이 document.write로 DOM에 직접 출력하여 XSS가 발생합니다.',
+          recommendation: 'textContent 또는 이스케이프 함수를 사용하여 안전하게 출력하세요.',
+        },
+      },
+
+      // 4) JavaScript 파일 (JS 언어 감지 테스트용)
+      'legacy_crypto.js': {
+        hasFinding: true,
+        codeLines: [
+          '// [취약점: Hardcoded Secret]',
+          'const LEGACY_CIPHER_KEY = "aes_secret_key_fixed_vector_2026";',
+          '',
+          'export function encrypt(text) {',
+          '  return "encrypted_" + text;',
+          '}',
+        ],
+        vulnLineIndices: [1],
+        tagLabel: 'JavaScript · Hardcoded Secret 탐지됨',
+        finding: {
+          id: 204,
+          vulnerabilityType: 'HARDCODED_SECRET',
+          severity: 'HIGH',
+          title: '하드코딩된 암호화 키 (JavaScript)',
+          severityBadge: '높음 95% · CWE-798',
+          cwe: 'CWE-798',
+          confidence: '95%',
+          status: 'OPEN',
+          line: 2,
+          vulnLineIndices: [1],
+          detectionSource: {
+            title: '탐지 근거 · 규칙 기반 (Rule-based)',
+            ruleId: 'JS-SEC-001',
+            ruleTitle: '하드코딩된 암호키',
+            matchedCode: 'const LEGACY_CIPHER_KEY = "aes_secret_key_fixed_vector_2026";',
+          },
+          description: '암호화 키가 소스코드에 하드코딩되어 유출 시 데이터 복호화 위험이 있습니다.',
+          recommendation: '환경 변수(process.env)를 통해 주입받으세요.',
+        },
+      },
+
+      // 5) 알 수 없는 언어 (확인실패 테스트용 1)
+      'custom_data.unknown': {
+        hasFinding: false,
+        codeLines: [
+          '[PROPRIETARY_BINARY_PROTOCOL_V2]',
+          'HEADER_MAGIC_BYTES: 0x99204A_FF_00',
+          'DATA_PAYLOAD_CHUNK_START',
+          'RAW_BLOCK_UNSUPPORTED_LANGUAGE_FORMAT',
+          'CHECKSUM_CRC32: 0xDEADBEEF',
+          'DATA_PAYLOAD_CHUNK_END',
+        ],
+        vulnLineIndices: [],
+        tagLabel: '',
+        finding: null,
+      },
+
+      // 6) 알 수 없는 언어 (확인실패 테스트용 2)
+      'config_module.xyz': {
+        hasFinding: false,
+        codeLines: [
+          '# 사용자 정의 미지원 확장자 (.xyz)',
+          'CONFIG_REGISTRY_MODE = "CUSTOM_XYZ"',
+          'SECURITY_SCAN_OVERRIDE = FALSE',
+          'PORT = 9981',
+        ],
+        vulnLineIndices: [],
+        tagLabel: '',
+        finding: null,
       },
     },
   },
@@ -1184,10 +1415,38 @@ export function normalizeProjectId(rawProjectId) {
   if (!rawProjectId) return 'payments-api';
   const str = String(rawProjectId).trim();
   if (PROJECTS_DATA[str]) return str;
+
   // 번호나 별칭 매핑 (예: 128 -> payments-api)
   if (str === '128' || str === '1') return 'payments-api';
   if (str === '2' || str === 'auth') return 'auth-service';
   if (str === '3' || str === 'admin') return 'admin-console';
+
+  // localStorage에 저장된 커스텀 프로젝트 확인
+  try {
+    const saved = localStorage.getItem(scopedKey('codeguard_custom_projects'));
+    if (saved) {
+      const customList = JSON.parse(saved);
+      const match = customList.find((p) => p.id === str || p.name === str);
+      if (match) {
+        // PROJECTS_DATA에 없는 경우 빈 프로젝트 구조로 메모리 등록
+        if (!PROJECTS_DATA[match.id]) {
+          const treeSaved = localStorage.getItem(scopedKey(`codeguard_tree_${match.id}`));
+          PROJECTS_DATA[match.id] = {
+            id: match.id,
+            name: match.name,
+            defaultFile: null,
+            filePaths: {},
+            treeData: treeSaved ? JSON.parse(treeSaved) : [],
+            fileFindingData: {},
+          };
+        }
+        return match.id;
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
   return 'payments-api';
 }
 
@@ -1196,7 +1455,10 @@ export function normalizeProjectId(rawProjectId) {
  */
 export function getProjectTreeData(projectId) {
   const normId = normalizeProjectId(projectId);
-  return JSON.parse(JSON.stringify(PROJECTS_DATA[normId].treeData));
+  if (!PROJECTS_DATA[normId]) {
+    return [];
+  }
+  return JSON.parse(JSON.stringify(PROJECTS_DATA[normId].treeData || []));
 }
 
 /**
@@ -1204,7 +1466,7 @@ export function getProjectTreeData(projectId) {
  */
 export function getProjectFileFindingData(projectId) {
   const normId = normalizeProjectId(projectId);
-  return PROJECTS_DATA[normId].fileFindingData;
+  return PROJECTS_DATA[normId]?.fileFindingData || {};
 }
 
 /**
@@ -1212,7 +1474,7 @@ export function getProjectFileFindingData(projectId) {
  */
 export function getProjectDefaultFile(projectId) {
   const normId = normalizeProjectId(projectId);
-  return PROJECTS_DATA[normId].defaultFile;
+  return PROJECTS_DATA[normId]?.defaultFile || null;
 }
 
 /**
