@@ -25,6 +25,7 @@ import {
 } from '../../services/projectService';
 import AddProjectModal from '../common/AddProjectModal';
 import { scopedKey } from '../../utils/accountScope';
+import logoUrl from '../../assets/logo.png';
 
 const FAVORITES_STORAGE_KEY = 'codeguard_favorite_projects';
 const DEFAULT_FAVORITES = ['payments-api'];
@@ -400,7 +401,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
         onClick={() => navigate('/')}
         style={{ cursor: 'pointer' }}
       >
-        <span className="brand-mark"></span>
+        <img className="brand-logo" src={logoUrl} alt="CodeGuard AI" />
         <b>CodeGuard AI</b>
       </div>
 
