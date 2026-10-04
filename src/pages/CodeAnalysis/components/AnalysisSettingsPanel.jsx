@@ -58,7 +58,7 @@ export default function AnalysisSettingsPanel({
       <div className="form-group">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
           <label style={{ margin: 0 }}>감지된 언어</label>
-          <span style={{ fontSize: '11px', color: langInfo.isSupported ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+          <span style={{ fontSize: '13px', color: langInfo.isSupported ? '#10b981' : '#ef4444', fontWeight: 600 }}>
             {langInfo.isSupported ? '✓ 분석 지원' : '✗ 확인실패'}
           </span>
         </div>
