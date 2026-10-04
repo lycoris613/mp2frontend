@@ -75,7 +75,7 @@ export default function HomePage({ setPage, currentUser, onLogin, onLogout }) {
         <HeroBanner onStart={handleStartAnalyze} />
 
         {error && (
-          <div style={{ marginBottom: '16px', padding: '12px 16px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderRadius: '8px', fontSize: '14px' }}>
+          <div style={{ marginBottom: '16px', padding: '12px 16px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderRadius: '8px', fontSize: '16px' }}>
             대시보드 통계 조회 오류: {error}
           </div>
         )}

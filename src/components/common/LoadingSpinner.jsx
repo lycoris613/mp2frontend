@@ -7,7 +7,7 @@ export default function LoadingSpinner({ message = '데이터를 불러오는 �
       <div className="spinner" style={{ display: 'inline-block', marginBottom: '8px' }}>
         ⏳
       </div>
-      <p style={{ color: 'var(--text-3)', fontSize: '13px' }}>{message}</p>
+      <p style={{ color: 'var(--text-3)', fontSize: '15px' }}>{message}</p>
     </div>
   );
 }

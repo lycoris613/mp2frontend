@@ -24,7 +24,7 @@ export default function RecentAnalysisList({
       </div>
 
       {projects.length === 0 ? (
-        <div style={{ padding: '24px 16px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+        <div style={{ padding: '24px 16px', textAlign: 'center', color: '#6b7280', fontSize: '15px' }}>
           최근 분석 이력이 없습니다.
         </div>
       ) : (

@@ -88,10 +88,10 @@ export default function LocalPathConfigModal({ isOpen, onClose, onPathChanged })
               <FolderCog size={18} />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#f8fafc' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#f8fafc' }}>
                 로컬 소스코드 저장 경로 설정
               </h3>
-              <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#94a3b8' }}>
+              <p style={{ margin: '2px 0 0 0', fontSize: '14px', color: '#94a3b8' }}>
                 다른 컴퓨터 또는 다른 드라이브/폴더에서 작업할 때 경로를 직접 수정할 수 있습니다.
               </p>
             </div>
@@ -114,7 +114,7 @@ export default function LocalPathConfigModal({ isOpen, onClose, onPathChanged })
 
         {/* 경로 입력 폼 */}
         <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px', color: '#cbd5e1' }}>
+          <label style={{ display: 'block', fontSize: '15px', fontWeight: 500, marginBottom: '8px', color: '#cbd5e1' }}>
             로컬 기준 폴더 절대 경로 (Base Directory)
           </label>
           <div style={{ position: 'relative' }}>
@@ -134,7 +134,7 @@ export default function LocalPathConfigModal({ isOpen, onClose, onPathChanged })
                 border: '1px solid #334155',
                 borderRadius: '6px',
                 color: '#f8fafc',
-                fontSize: '13px',
+                fontSize: '15px',
                 boxSizing: 'border-box',
                 fontFamily: 'monospace',
               }}
@@ -150,7 +150,7 @@ export default function LocalPathConfigModal({ isOpen, onClose, onPathChanged })
             border: '1px solid rgba(99, 102, 241, 0.2)',
             borderRadius: '6px',
             marginBottom: '20px',
-            fontSize: '12px',
+            fontSize: '14px',
             lineHeight: '1.5',
             color: '#cbd5e1',
             display: 'flex',
@@ -184,7 +184,7 @@ export default function LocalPathConfigModal({ isOpen, onClose, onPathChanged })
               border: '1px solid #334155',
               color: '#94a3b8',
               borderRadius: '6px',
-              fontSize: '12px',
+              fontSize: '14px',
               cursor: 'pointer',
             }}
             title="기본값(C:\Users\user\Documents\code)으로 되돌리기"
@@ -203,7 +203,7 @@ export default function LocalPathConfigModal({ isOpen, onClose, onPathChanged })
                 border: '1px solid #334155',
                 color: '#94a3b8',
                 borderRadius: '6px',
-                fontSize: '13px',
+                fontSize: '15px',
                 cursor: 'pointer',
               }}
             >
@@ -222,7 +222,7 @@ export default function LocalPathConfigModal({ isOpen, onClose, onPathChanged })
                 border: 'none',
                 color: '#ffffff',
                 borderRadius: '6px',
-                fontSize: '13px',
+                fontSize: '15px',
                 fontWeight: 600,
                 cursor: inputPath.trim() ? 'pointer' : 'not-allowed',
                 transition: 'background 0.2s',

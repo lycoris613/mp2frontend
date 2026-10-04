@@ -542,7 +542,7 @@ export default function FileTree({
                   padding: '30px 14px',
                   textAlign: 'center',
                   color: 'var(--text-3, #64748b)',
-                  fontSize: '11px',
+                  fontSize: '13px',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
@@ -563,7 +563,7 @@ export default function FileTree({
                     border: '1px solid rgba(56, 189, 248, 0.35)',
                     color: '#38bdf8',
                     borderRadius: '6px',
-                    fontSize: '11.5px',
+                    fontSize: '13.5px',
                     cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -594,7 +594,7 @@ export default function FileTree({
             boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
             zIndex: 9999,
             minWidth: '140px',
-            fontSize: '12px',
+            fontSize: '14px',
             color: '#e2e8f0',
           }}
           onClick={(e) => e.stopPropagation()}
@@ -724,7 +724,7 @@ export default function FileTree({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <FilePlus size={18} color="#38bdf8" />
-                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>새 파일 추가</h3>
+                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600 }}>새 파일 추가</h3>
               </div>
               <button
                 type="button"
@@ -735,12 +735,12 @@ export default function FileTree({
               </button>
             </div>
 
-            <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '12px' }}>
+            <div style={{ fontSize: '14px', color: '#94a3b8', marginBottom: '12px' }}>
               대상 폴더: <span style={{ color: '#38bdf8', fontWeight: 500 }}>{addModal.targetFolder}</span>
             </div>
 
             <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '12px', marginBottom: '6px', color: '#cbd5e1' }}>
+              <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', color: '#cbd5e1' }}>
                 파일 이름 (확장자 포함)
               </label>
               <input
@@ -759,7 +759,7 @@ export default function FileTree({
                   border: '1px solid #333d4e',
                   borderRadius: '6px',
                   color: '#f8fafc',
-                  fontSize: '13px',
+                  fontSize: '15px',
                   boxSizing: 'border-box',
                 }}
               />
@@ -777,7 +777,7 @@ export default function FileTree({
                   border: '1px dashed #38bdf8',
                   borderRadius: '6px',
                   color: '#38bdf8',
-                  fontSize: '12px',
+                  fontSize: '14px',
                   padding: '6px 12px',
                   cursor: 'pointer',
                   width: '100%',
@@ -799,7 +799,7 @@ export default function FileTree({
                   border: '1px solid #333d4e',
                   color: '#94a3b8',
                   borderRadius: '6px',
-                  fontSize: '13px',
+                  fontSize: '15px',
                   cursor: 'pointer',
                 }}
               >
@@ -815,7 +815,7 @@ export default function FileTree({
                   border: 'none',
                   color: '#ffffff',
                   borderRadius: '6px',
-                  fontSize: '13px',
+                  fontSize: '15px',
                   fontWeight: 600,
                   cursor: newFileName.trim() ? 'pointer' : 'not-allowed',
                 }}
@@ -857,7 +857,7 @@ export default function FileTree({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Edit2 size={16} color="#38bdf8" />
-                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>
+                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600 }}>
                   {renameModal.isDir ? '폴더 이름 수정' : '파일 이름 수정'}
                 </h3>
               </div>
@@ -871,7 +871,7 @@ export default function FileTree({
             </div>
 
             <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', fontSize: '12px', marginBottom: '6px', color: '#cbd5e1' }}>
+              <label style={{ display: 'block', fontSize: '14px', marginBottom: '6px', color: '#cbd5e1' }}>
                 새 이름
               </label>
               <input
@@ -889,7 +889,7 @@ export default function FileTree({
                   border: '1px solid #333d4e',
                   borderRadius: '6px',
                   color: '#f8fafc',
-                  fontSize: '13px',
+                  fontSize: '15px',
                   boxSizing: 'border-box',
                 }}
               />
@@ -905,7 +905,7 @@ export default function FileTree({
                   border: '1px solid #333d4e',
                   color: '#94a3b8',
                   borderRadius: '6px',
-                  fontSize: '13px',
+                  fontSize: '15px',
                   cursor: 'pointer',
                 }}
               >
@@ -921,7 +921,7 @@ export default function FileTree({
                   border: 'none',
                   color: '#ffffff',
                   borderRadius: '6px',
-                  fontSize: '13px',
+                  fontSize: '15px',
                   fontWeight: 600,
                   cursor: renameValue.trim() ? 'pointer' : 'not-allowed',
                 }}
@@ -962,16 +962,16 @@ export default function FileTree({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
               <AlertTriangle size={20} color="#f87171" />
-              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: '#fca5a5' }}>
+              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#fca5a5' }}>
                 {deleteModal.isDir ? '폴더 삭제 확인' : '파일 삭제 확인'}
               </h3>
             </div>
 
-            <p style={{ fontSize: '13px', lineHeight: '1.5', color: '#cbd5e1', margin: '0 0 16px 0' }}>
+            <p style={{ fontSize: '15px', lineHeight: '1.5', color: '#cbd5e1', margin: '0 0 16px 0' }}>
               정말 <strong style={{ color: '#ffffff' }}>'{deleteModal.node?.name}'</strong>{' '}
               {deleteModal.isDir ? '폴더를' : '파일을'} 삭제하시겠습니까?
               <br />
-              <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+              <span style={{ fontSize: '14px', color: '#94a3b8' }}>
                 내 컴퓨터(C:\Users\user\Documents\code)의 실제 파일 시스템에서도 영구 삭제됩니다.
               </span>
             </p>
@@ -986,7 +986,7 @@ export default function FileTree({
                   border: '1px solid #333d4e',
                   color: '#94a3b8',
                   borderRadius: '6px',
-                  fontSize: '13px',
+                  fontSize: '15px',
                   cursor: 'pointer',
                 }}
               >
@@ -1001,7 +1001,7 @@ export default function FileTree({
                   border: 'none',
                   color: '#ffffff',
                   borderRadius: '6px',
-                  fontSize: '13px',
+                  fontSize: '15px',
                   fontWeight: 600,
                   cursor: 'pointer',
                 }}

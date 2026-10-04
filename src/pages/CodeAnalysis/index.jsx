@@ -301,6 +301,7 @@ export default function CodeAnalysisPage({ setPage, currentUser, onLogin, onLogo
       {/* 로컬 파일 동기화 성공/알림 토스트 */}
       {localSyncToast && (
         <div
+          className="info-banner"
           style={{
             margin: '0 24px 12px 24px',
             padding: '10px 18px',
@@ -312,7 +313,7 @@ export default function CodeAnalysisPage({ setPage, currentUser, onLogin, onLogo
             gap: '10px',
             color: '#065f46',
             fontWeight: 500,
-            fontSize: '13px',
+            fontSize: '15px',
           }}
         >
           <CheckCircle size={16} color="#10b981" />
@@ -322,6 +323,7 @@ export default function CodeAnalysisPage({ setPage, currentUser, onLogin, onLogo
 
       {/* 로컬 PC 파일 연동 정보 배너 */}
       <div
+        className="info-banner"
         style={{
           margin: '0 24px 12px 24px',
           padding: '8px 16px',
@@ -332,7 +334,7 @@ export default function CodeAnalysisPage({ setPage, currentUser, onLogin, onLogo
           alignItems: 'center',
           justifyContent: 'space-between',
           color: 'var(--text-2)',
-          fontSize: '12px',
+          fontSize: '14px',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
@@ -360,7 +362,7 @@ export default function CodeAnalysisPage({ setPage, currentUser, onLogin, onLogo
               border: '1px solid rgba(99, 102, 241, 0.35)',
               borderRadius: '4px',
               color: '#818cf8',
-              fontSize: '11px',
+              fontSize: '13px',
               cursor: 'pointer',
               fontWeight: 500,
               whiteSpace: 'nowrap',
@@ -373,7 +375,7 @@ export default function CodeAnalysisPage({ setPage, currentUser, onLogin, onLogo
             <span style={{ whiteSpace: 'nowrap' }}>경로 변경</span>
           </button>
         </div>
-        <span style={{ color: 'var(--text-3)', fontSize: '11px', flexShrink: 0, marginLeft: '12px' }}>
+        <span style={{ color: 'var(--text-3)', fontSize: '13px', flexShrink: 0, marginLeft: '12px' }}>
           우클릭으로 파일 추가/수정/삭제 및 드래그로 계층 변경 시 해당 로컬 경로에 즉시 반영됩니다.
         </span>
       </div>

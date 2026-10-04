@@ -111,13 +111,13 @@ export default function AddProjectModal({ isOpen, onClose, onProjectCreated }) {
               <FolderPlus size={18} color="#10b981" />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>
+              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600 }}>
                 새 빈 프로젝트 추가
               </h3>
               <p
                 style={{
                   margin: '2px 0 0',
-                  fontSize: '11px',
+                  fontSize: '13px',
                   color: 'var(--text-3, #94a3b8)',
                 }}
               >
@@ -155,7 +155,7 @@ export default function AddProjectModal({ isOpen, onClose, onProjectCreated }) {
                 alignItems: 'center',
                 gap: '8px',
                 color: '#f87171',
-                fontSize: '12px',
+                fontSize: '14px',
               }}
             >
               <AlertCircle size={15} />
@@ -167,7 +167,7 @@ export default function AddProjectModal({ isOpen, onClose, onProjectCreated }) {
             <label
               style={{
                 display: 'block',
-                fontSize: '12px',
+                fontSize: '14px',
                 fontWeight: 600,
                 marginBottom: '6px',
                 color: 'var(--text-2, #cbd5e1)',
@@ -188,7 +188,7 @@ export default function AddProjectModal({ isOpen, onClose, onProjectCreated }) {
                 border: '1px solid var(--border, #2a3447)',
                 borderRadius: '6px',
                 color: 'var(--text-1, #f8fafc)',
-                fontSize: '13px',
+                fontSize: '15px',
                 outline: 'none',
                 boxSizing: 'border-box',
               }}
@@ -197,7 +197,7 @@ export default function AddProjectModal({ isOpen, onClose, onProjectCreated }) {
               style={{
                 display: 'block',
                 marginTop: '4px',
-                fontSize: '11px',
+                fontSize: '13px',
                 color: 'var(--text-3, #64748b)',
               }}
             >
@@ -209,7 +209,7 @@ export default function AddProjectModal({ isOpen, onClose, onProjectCreated }) {
             <label
               style={{
                 display: 'block',
-                fontSize: '12px',
+                fontSize: '14px',
                 fontWeight: 600,
                 marginBottom: '6px',
                 color: 'var(--text-2, #cbd5e1)',
@@ -229,7 +229,7 @@ export default function AddProjectModal({ isOpen, onClose, onProjectCreated }) {
                 border: '1px solid var(--border, #2a3447)',
                 borderRadius: '6px',
                 color: 'var(--text-1, #f8fafc)',
-                fontSize: '13px',
+                fontSize: '15px',
                 outline: 'none',
                 boxSizing: 'border-box',
               }}
@@ -260,7 +260,7 @@ export default function AddProjectModal({ isOpen, onClose, onProjectCreated }) {
             <label
               htmlFor="createSrcFolder"
               style={{
-                fontSize: '12px',
+                fontSize: '14px',
                 color: 'var(--text-2, #cbd5e1)',
                 cursor: 'pointer',
                 userSelect: 'none',
@@ -281,7 +281,7 @@ export default function AddProjectModal({ isOpen, onClose, onProjectCreated }) {
                 border: '1px solid var(--border, #333d4e)',
                 color: 'var(--text-2, #94a3b8)',
                 borderRadius: '6px',
-                fontSize: '12px',
+                fontSize: '14px',
                 cursor: 'pointer',
               }}
             >
@@ -298,7 +298,7 @@ export default function AddProjectModal({ isOpen, onClose, onProjectCreated }) {
                 border: 'none',
                 color: projectName.trim() ? '#022c22' : '#64748b',
                 borderRadius: '6px',
-                fontSize: '12px',
+                fontSize: '14px',
                 fontWeight: 600,
                 cursor: projectName.trim() ? 'pointer' : 'not-allowed',
                 display: 'inline-flex',

@@ -979,7 +979,7 @@ export default function FindingResultPage({
                 color: '#059669',
                 background: 'rgba(16, 185, 129, 0.06)',
                 fontWeight: 600,
-                fontSize: '12px',
+                fontSize: '14px',
                 padding: '6px 12px',
                 borderRadius: '6px',
                 cursor: 'pointer',
@@ -1000,7 +1000,7 @@ export default function FindingResultPage({
                 borderColor: 'var(--high)',
                 color: 'var(--high)',
                 fontWeight: 600,
-                fontSize: '12px',
+                fontSize: '14px',
                 padding: '6px 12px',
                 borderRadius: '6px',
                 cursor: 'pointer',
@@ -1016,6 +1016,7 @@ export default function FindingResultPage({
       {/* 로컬 파일 동기화 성공/알림 토스트 */}
       {localSyncToast && (
         <div
+          className="info-banner"
           style={{
             margin: '0 24px 12px 24px',
             padding: '10px 18px',
@@ -1027,7 +1028,7 @@ export default function FindingResultPage({
             gap: '10px',
             color: '#065f46',
             fontWeight: 500,
-            fontSize: '13px',
+            fontSize: '15px',
           }}
         >
           <CheckCircle size={16} color="#10b981" />
@@ -1037,6 +1038,7 @@ export default function FindingResultPage({
 
       {/* 로컬 PC 파일 연동 정보 배너 */}
       <div
+        className="info-banner"
         style={{
           margin: '0 24px 12px 24px',
           padding: '8px 16px',
@@ -1047,10 +1049,10 @@ export default function FindingResultPage({
           alignItems: 'center',
           justifyContent: 'space-between',
           color: 'var(--text-2)',
-          fontSize: '12px',
+          fontSize: '14px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="info-banner-inner" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <HardDrive size={14} color="#6366f1" />
           <span>
             로컬 파일 실시간 연동 중:{' '}
@@ -1071,7 +1073,7 @@ export default function FindingResultPage({
               border: '1px solid rgba(99, 102, 241, 0.35)',
               borderRadius: '4px',
               color: '#818cf8',
-              fontSize: '11px',
+              fontSize: '13px',
               cursor: 'pointer',
               marginLeft: '6px',
               fontWeight: 500,
@@ -1090,6 +1092,7 @@ export default function FindingResultPage({
       {/* 분석 실행 정보 알림 바 (현재 파일만 분석한 경우 또는 특정 룰만 검사한 경우 안내) */}
       {currentAnalysisRun && !currentAnalysisRun.isInitialDefault && (
         <div
+          className="info-banner"
           style={{
             margin: '0 24px 12px 24px',
             padding: '8px 16px',
@@ -1099,11 +1102,11 @@ export default function FindingResultPage({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            fontSize: '12px',
+            fontSize: '14px',
             color: 'var(--text-2)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="info-banner-inner" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ShieldAlert size={14} color="var(--accent)" />
             <span>
               최근 실행된 분석: <strong style={{ color: 'var(--accent)' }}>{analysisTitleText}</strong> (ID: #{currentAnalysisRun.analysisId})
@@ -1124,6 +1127,7 @@ export default function FindingResultPage({
       {/* 모든 취약점 해결 알림 바 */}
       {showAllResolvedToast && (
         <div
+          className="info-banner"
           style={{
             margin: '0 24px 12px 24px',
             padding: '10px 18px',
@@ -1135,7 +1139,7 @@ export default function FindingResultPage({
             gap: '10px',
             color: '#065f46',
             fontWeight: 500,
-            fontSize: '13px',
+            fontSize: '15px',
           }}
         >
           <CheckCircle size={16} color="#10b981" />
@@ -1204,13 +1208,13 @@ export default function FindingResultPage({
                 <div style={{ display: 'inline-flex', padding: '12px', background: '#ecfdf5', borderRadius: '50%', marginBottom: '16px', color: '#10b981' }}>
                   <CheckCircle size={32} />
                 </div>
-                <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#111827', marginBottom: '8px' }}>
+                <h3 style={{ fontSize: '17px', fontWeight: 600, color: '#111827', marginBottom: '8px' }}>
                   보안 취약점 없음
                 </h3>
-                <p style={{ fontSize: '13px', color: '#6b7280', lineHeight: 1.6, marginBottom: '16px' }}>
+                <p style={{ fontSize: '15px', color: '#6b7280', lineHeight: 1.6, marginBottom: '16px' }}>
                   선택하신 <strong>{selectedFile}</strong> 파일에 대한 정적 분석 결과, 보안 규칙 위반 사항이 발견되지 않았습니다.
                 </p>
-                <span style={{ display: 'inline-block', fontSize: '12px', fontWeight: 500, padding: '4px 10px', background: '#ecfdf5', color: '#047857', borderRadius: '4px' }}>
+                <span style={{ display: 'inline-block', fontSize: '14px', fontWeight: 500, padding: '4px 10px', background: '#ecfdf5', color: '#047857', borderRadius: '4px' }}>
                   ✓ 보안 점검 통과 (Clean)
                 </span>
               </div>
@@ -1293,7 +1297,7 @@ export default function FindingResultPage({
             display: 'flex',
             alignItems: 'center',
             gap: '12px',
-            fontSize: '13px',
+            fontSize: '15px',
             zIndex: 9999,
           }}
         >

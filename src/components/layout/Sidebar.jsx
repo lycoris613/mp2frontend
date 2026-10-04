@@ -589,7 +589,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
           <div
             style={{
               padding: '6px 10px',
-              fontSize: '11px',
+              fontSize: '13px',
               fontWeight: 600,
               color: '#94a3b8',
               borderBottom: '1px solid #1e2636',
@@ -617,7 +617,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
               color: '#f1f5f9',
               cursor: 'pointer',
               borderRadius: '5px',
-              fontSize: '12px',
+              fontSize: '14px',
               fontWeight: 500,
               textAlign: 'left',
               transition: 'background 0.12s ease',
@@ -644,7 +644,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
               color: '#f87171',
               cursor: 'pointer',
               borderRadius: '5px',
-              fontSize: '12px',
+              fontSize: '14px',
               fontWeight: 500,
               textAlign: 'left',
               transition: 'background 0.12s ease',
@@ -714,7 +714,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
                   <Edit2 size={16} color="#38bdf8" />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>
+                  <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600 }}>
                     프로젝트 이름 수정
                   </h3>
                 </div>
@@ -743,7 +743,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
                 <label
                   style={{
                     display: 'block',
-                    fontSize: '12px',
+                    fontSize: '14px',
                     fontWeight: 600,
                     marginBottom: '8px',
                     color: 'var(--text-2, #cbd5e1)',
@@ -772,7 +772,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
                       : '1px solid var(--border-strong, #333d4e)',
                     borderRadius: '6px',
                     color: '#f8fafc',
-                    fontSize: '13px',
+                    fontSize: '15px',
                     outline: 'none',
                     boxSizing: 'border-box',
                   }}
@@ -781,7 +781,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
                   <p
                     style={{
                       margin: '6px 0 0',
-                      fontSize: '12px',
+                      fontSize: '14px',
                       color: '#f87171',
                       display: 'flex',
                       alignItems: 'center',
@@ -794,7 +794,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
                 <p
                   style={{
                     margin: '6px 0 0',
-                    fontSize: '11px',
+                    fontSize: '13px',
                     color: 'var(--text-3, #94a3b8)',
                   }}
                 >
@@ -821,7 +821,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
                     border: '1px solid var(--border-strong, #333d4e)',
                     borderRadius: '6px',
                     color: 'var(--text-2, #cbd5e1)',
-                    fontSize: '13px',
+                    fontSize: '15px',
                     cursor: isRenaming ? 'not-allowed' : 'pointer',
                   }}
                 >
@@ -836,7 +836,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
                     border: 'none',
                     borderRadius: '6px',
                     color: '#ffffff',
-                    fontSize: '13px',
+                    fontSize: '15px',
                     fontWeight: 600,
                     cursor: renameValue.trim() && !isRenaming ? 'pointer' : 'not-allowed',
                     transition: 'all 0.15s ease',
@@ -906,7 +906,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
                   <AlertTriangle size={17} color="#ef4444" />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: '#f87171' }}>
+                  <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#f87171' }}>
                     프로젝트 삭제
                   </h3>
                 </div>
@@ -934,7 +934,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
               <p
                 style={{
                   margin: '0 0 10px',
-                  fontSize: '13px',
+                  fontSize: '15px',
                   lineHeight: '1.6',
                   color: 'var(--text-1, #f8fafc)',
                 }}
@@ -945,7 +945,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
               <p
                 style={{
                   margin: 0,
-                  fontSize: '12px',
+                  fontSize: '14px',
                   lineHeight: '1.5',
                   color: 'var(--text-3, #94a3b8)',
                   background: 'var(--bg-2, #181f2c)',
@@ -976,7 +976,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
                     border: '1px solid var(--border-strong, #333d4e)',
                     borderRadius: '6px',
                     color: 'var(--text-2, #cbd5e1)',
-                    fontSize: '13px',
+                    fontSize: '15px',
                     cursor: isDeleting ? 'not-allowed' : 'pointer',
                   }}
                 >
@@ -992,7 +992,7 @@ export default function Sidebar({ currentUser = null, onLogout }) {
                     border: 'none',
                     borderRadius: '6px',
                     color: '#ffffff',
-                    fontSize: '13px',
+                    fontSize: '15px',
                     fontWeight: 600,
                     cursor: isDeleting ? 'not-allowed' : 'pointer',
                     display: 'flex',
